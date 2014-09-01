@@ -10,18 +10,21 @@ public class GitRepository {
 	private String name;
 	private String language;
 	private String stars;
+	private GitRepositoryOwner owner;
 
 	@JsonCreator
 	public GitRepository(
 			@JsonProperty("id") String id,
 			@JsonProperty("name") String name,
 			@JsonProperty("language") String language,
-			@JsonProperty("stargazers_count") String stars) {
+			@JsonProperty("stargazers_count") String stars,
+			@JsonProperty("owner") GitRepositoryOwner owner) {
 		super();
 		this.id = id;
 		this.name = name;
 		this.language = language;
 		this.stars = stars;
+		this.owner = owner;
 	}
 
 	public String getId() {
@@ -54,5 +57,13 @@ public class GitRepository {
 
 	public void setStars(String stars) {
 		this.stars = stars;
+	}
+
+	public GitRepositoryOwner getOwner() {
+		return owner;
+	}
+
+	public void setOwner(GitRepositoryOwner owner) {
+		this.owner = owner;
 	}
 }
