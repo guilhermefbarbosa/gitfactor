@@ -1,40 +1,50 @@
 package br.com.guilhermebarbosa.gitfactor;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Test;
 import org.springframework.web.client.RestTemplate;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 
 public class RepositoryFinderTest {
 	private static final String GIT_HUB_QUERY_REPOS = "https://api.github.com/search/repositories?q=language:Java&sort=stars&order=desc&per_page=100";
 	private static final String GIT_HUB_QUERY_TAGS = "https://api.github.com/repos/%1$s/%2$s/tags";
+	private static final String GIT_HUB_AUTHENTICATION = "https://api.github.com/user?access_token=ea604eb7230a230d3e13080b500c2d931cffd593";
 
 	@Test
-	public void testFindGitHubRepositories() {
+	public void testFindGitHubRepositories() throws InterruptedException {
 		RestTemplate restTemplate = new RestTemplate();
+		Object responseAuth = restTemplate.getForObject(GIT_HUB_AUTHENTICATION, Object.class);
+		// aguarda 1min
+		Thread.sleep(60000);
+		// get repositories
         GitRepositorySearchResult gitSearchResult = restTemplate.getForObject(GIT_HUB_QUERY_REPOS, GitRepositorySearchResult.class);
         List<GitRepository> javaRepos = getJavaRepositories(gitSearchResult);
         for (GitRepository gitRepository : javaRepos) {
+        	// aguarda 1min
+    		Thread.sleep(60000);
 			System.out.println(gitRepository.getName() + " - stars: " + gitRepository.getStars());
+			// get tags
+			List<GitRepositoryTag> tags = getRepositoryTags(restTemplate, gitRepository);
+			for (GitRepositoryTag gitRepositoryTag : tags) {
+				System.out.println(String.format("repo (%1$s), user(%2$s), tag: %3$s", gitRepository.getName(), gitRepository.getOwner().getLogin(), gitRepositoryTag.getName()));
+			}
+		}
+	}
+
+	private List<GitRepositoryTag> getRepositoryTags(RestTemplate restTemplate, GitRepository gitRepository) {
+		try {
 			String urlTags = obterUrlTags(gitRepository.getOwner().getLogin(), gitRepository.getName());
 			String json = restTemplate.getForObject(urlTags, String.class);
 			ObjectMapper mapper = new ObjectMapper();
-			try {
-				List<GitRepositoryTag> tags = (List<GitRepositoryTag>) mapper.readValue(json, TypeFactory.defaultInstance().constructCollectionType(List.class, GitRepositoryTag.class));
-				for (GitRepositoryTag gitRepositoryTag : tags) {
-					System.out.println(String.format("repo (%1$s), user(%2$s), tag: %3$s", gitRepository.getName(), gitRepository.getOwner().getLogin(), gitRepositoryTag.getName()));
-				}
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+			return (List<GitRepositoryTag>) mapper.readValue(json, TypeFactory.defaultInstance().constructCollectionType(List.class, GitRepositoryTag.class));
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
+		return new ArrayList<GitRepositoryTag>();
 	}
 
 	private List<GitRepository> getJavaRepositories(GitRepositorySearchResult gitSearchResult) {
