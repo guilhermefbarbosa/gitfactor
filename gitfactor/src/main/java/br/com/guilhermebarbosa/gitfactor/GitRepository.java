@@ -10,6 +10,7 @@ public class GitRepository {
 	private String name;
 	private String language;
 	private String stars;
+	private String cloneUrl;
 	private GitRepositoryOwner owner;
 
 	@JsonCreator
@@ -18,13 +19,15 @@ public class GitRepository {
 			@JsonProperty("name") String name,
 			@JsonProperty("language") String language,
 			@JsonProperty("stargazers_count") String stars,
-			@JsonProperty("owner") GitRepositoryOwner owner) {
+			@JsonProperty("owner") GitRepositoryOwner owner,
+			@JsonProperty("clone_url") String cloneUrl) {
 		super();
 		this.id = id;
 		this.name = name;
 		this.language = language;
 		this.stars = stars;
 		this.owner = owner;
+		this.cloneUrl = cloneUrl;
 	}
 
 	public String getId() {
@@ -65,5 +68,13 @@ public class GitRepository {
 
 	public void setOwner(GitRepositoryOwner owner) {
 		this.owner = owner;
+	}
+
+	public String getCloneUrl() {
+		return cloneUrl;
+	}
+
+	public void setCloneUrl(String cloneUrl) {
+		this.cloneUrl = cloneUrl;
 	}
 }
