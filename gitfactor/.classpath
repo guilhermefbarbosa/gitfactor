@@ -32,5 +32,15 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry combineaccessrules="false" kind="src" path="/RefactoringDetector"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/asm-3.3.1.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/asm-tree-3.3.1.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/asm-util-3.3.1.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/commons-io-2.0.1.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/jdom.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/joda-time-2.1.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/plexus-0.16.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/sequence-library-1.0.0.jar"/>
+	<classpathentry kind="lib" path="/RefactoringDetector/lib/xmidiff.jar"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>
