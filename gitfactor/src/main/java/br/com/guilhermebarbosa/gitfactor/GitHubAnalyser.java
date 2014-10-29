@@ -82,9 +82,15 @@ public class GitHubAnalyser {
 //				LOGGER.info("revCommit = " + revCommit.getName());
 				// se possui apenas um pai, faz a comparacao
 				if ( revCommit.getParentCount() == 1 ) {
+					long init = System.currentTimeMillis();
 					GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
+					long end = System.currentTimeMillis();
+					LOGGER.info(String.format("Tempo total buildModelStructure(): %1$s [s].", ((end-init)/1000.0)));
+					init = System.currentTimeMillis();
 					// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
 					analyseModelRefactorings(modelStructure);
+					end = System.currentTimeMillis();
+					LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end-init)/1000.0)));
 					// log
 					LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits, obterPercentual(totalCommits, countCommits)));
 				}
