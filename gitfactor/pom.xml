@@ -47,6 +47,11 @@
 			<artifactId>xmi</artifactId>
 			<version>1.0</version>
 		</dependency>
+		<dependency>
+			<groupId>org.eclipse.jdt</groupId>
+			<artifactId>org.eclipse.jdt.core</artifactId>
+			<version>3.7.1</version>
+		</dependency>
 	</dependencies>
 
 	<properties>
