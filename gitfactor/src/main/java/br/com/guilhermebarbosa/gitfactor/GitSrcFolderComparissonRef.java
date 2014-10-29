@@ -1,27 +1,40 @@
 package br.com.guilhermebarbosa.gitfactor;
 
+import gr.uom.java.xmi.UMLModel;
+import gr.uom.java.xmi.diff.UMLModelDiff;
+
 public class GitSrcFolderComparissonRef {
-	private String srcPath1;
-	private String srcPath2;
-	
-	public GitSrcFolderComparissonRef(String srcPath1, String srcPath2) {
-		this.srcPath1 = srcPath1;
-		this.srcPath2 = srcPath2;
+	private UMLModel model1;
+	private UMLModel model2;
+	private UMLModelDiff diff;
+
+	public GitSrcFolderComparissonRef(UMLModel model1, UMLModel model2, UMLModelDiff diff) {
+		this.model1 = model1;
+		this.model2 = model2;
+		this.diff = diff;
 	}
 
-	public String getSrcPath1() {
-		return srcPath1;
+	public UMLModel getModel1() {
+		return model1;
 	}
 
-	public void setSrcPath1(String srcPath1) {
-		this.srcPath1 = srcPath1;
+	public void setModel1(UMLModel model1) {
+		this.model1 = model1;
 	}
 
-	public String getSrcPath2() {
-		return srcPath2;
+	public UMLModel getModel2() {
+		return model2;
 	}
 
-	public void setSrcPath2(String srcPath2) {
-		this.srcPath2 = srcPath2;
+	public void setModel2(UMLModel model2) {
+		this.model2 = model2;
+	}
+
+	public UMLModelDiff getDiff() {
+		return diff;
+	}
+
+	public void setDiff(UMLModelDiff diff) {
+		this.diff = diff;
 	}
 }
