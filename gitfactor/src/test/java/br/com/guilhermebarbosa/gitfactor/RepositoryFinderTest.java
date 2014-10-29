@@ -29,9 +29,7 @@ import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.eclipse.jgit.api.errors.RefAlreadyExistsException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.api.errors.TransportException;
-import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Ref;
-import org.eclipse.jgit.lib.RefUpdate.Result;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.junit.Test;
 import org.springframework.util.StringUtils;
@@ -39,50 +37,18 @@ import org.springframework.web.client.RestTemplate;
 
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
 
+import com.google.common.collect.Iterables;
+
 public class RepositoryFinderTest {
 	private static final Logger LOGGER = Logger.getLogger(RepositoryFinderTest.class);
 	
 	private static final int WAIT_TIME = 30000;
 	private static final String GIT_HUB_QUERY_REPOS = "https://api.github.com/search/repositories?q=language:Java&sort=stars&order=desc&per_page=100";
-	private static final String GIT_HUB_QUERY_REPOS_SPRING = "https://api.github.com/search/repositories?q=spring-framework&language:Java&sort=stars&order=desc&per_page=100";
-	private static final String GIT_HUB_QUERY_TAGS = "https://api.github.com/repos/%1$s/%2$s/tags";
+//	private static final String GIT_HUB_QUERY_REPOS_SPRING = "https://api.github.com/search/repositories?q=spring-framework&language:Java&sort=stars&order=desc&per_page=100";
+//	private static final String GIT_HUB_QUERY_TAGS = "https://api.github.com/repos/%1$s/%2$s/tags";
 	private static final String GIT_HUB_AUTHENTICATION = "https://api.github.com/user?access_token=ea604eb7230a230d3e13080b500c2d931cffd593";
 	private static final String TEMP_FOLDER = "/var/tmp/git";
 
-//	@Ignore
-//	@Test
-//	public void findSourceFolders() {
-//		List<GitSrcFolderComparissonRef> listaSrcComparisson = obterFolderListForComparisson();
-//		// para cada src folder, chama o RefDetector
-//		for (GitSrcFolderComparissonRef gitSrcFolderComparissonRef : listaSrcComparisson) {
-//			System.out.println("Comparando folders");
-//			System.out.println(String.format("folder1 = %1$s", gitSrcFolderComparissonRef.getSrcPath1()));
-//			System.out.println(String.format("folder2 = %1$s", gitSrcFolderComparissonRef.getSrcPath2()));
-//			// compara usando o RefDetector
-//			compareVersions(gitSrcFolderComparissonRef.getSrcPath1(), gitSrcFolderComparissonRef.getSrcPath2());
-//		}
-//	}
-
-//	private List<GitSrcFolderComparissonRef> obterFolderListForComparisson() {
-//		String srcBasePath1 = TEMP_FOLDER + File.separator + "spring-framework_1";
-//		String srcBasePath2 = TEMP_FOLDER + File.separator + "spring-framework_2";
-//		List<String> list1 = new ArrayList<String>(getSrcFolder(new File(srcBasePath1), new HashSet<String>()));
-//		List<String> list2 = new ArrayList<String>(getSrcFolder(new File(srcBasePath2), new HashSet<String>()));
-//		// ordena
-//		Collections.sort(list1);
-//		// ordena
-//		Collections.sort(list2);
-//		List<GitSrcFolderComparissonRef> listaSrcComparisson = new ArrayList<GitSrcFolderComparissonRef>();
-//		for(String folder1 : list1) {
-//			for(String folder2 : list2) {
-//				if ( folder1.replaceAll(srcBasePath1, "").equals(folder2.replaceAll(srcBasePath2, "")) ) {
-//					listaSrcComparisson.add(new GitSrcFolderComparissonRef(folder1, folder2));
-//				}
-//			}
-//		}
-//		return listaSrcComparisson;
-//	}
-	
 	@Test
 	public void testFindGitHubRepositories() throws InterruptedException, InvalidRemoteException, TransportException, IOException, GitAPIException {
 		RestTemplate restTemplate = new RestTemplate();
@@ -90,7 +56,7 @@ public class RepositoryFinderTest {
 		// aguarda 1min
 		Thread.sleep(WAIT_TIME);
 		// get repositories
-        GitRepositorySearchResult gitSearchResult = restTemplate.getForObject(GIT_HUB_QUERY_REPOS_SPRING, GitRepositorySearchResult.class);
+        GitRepositorySearchResult gitSearchResult = restTemplate.getForObject(GIT_HUB_QUERY_REPOS, GitRepositorySearchResult.class);
         LOGGER.info("Searching git repositories...");
         List<GitRepository> javaRepos = getJavaRepositories(gitSearchResult);
         LOGGER.info(String.format("Found %1$d repositories.", javaRepos.size()));
@@ -109,45 +75,67 @@ public class RepositoryFinderTest {
 			Git git = Git.open(gitRepoPath);
 			// get logs
 			Iterable<RevCommit> call = git.log().call();
-			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
+			int totalCommits = Iterables.size(call);
+			LOGGER.info(String.format("Getting commit logs for repository %1$s. Total of commits: %2$d", gitRepository.getName(), totalCommits));
+			call = git.log().call();
+			int countCommits = 0;
 			for (RevCommit revCommit : call) {
+				countCommits ++;
 //				LOGGER.info("revCommit = " + revCommit.getName());
 				// se possui apenas um pai, faz a comparacao
 				if ( revCommit.getParentCount() == 1 ) {
-					// cria objeto que armazena as comparacoes
-					GitModelStructure modelStructure = new GitModelStructure();
-					// faz checkout do filho
-					CheckoutCommand checkout = checkout(git, revCommit);
-					// obtem o map model do filho
-					modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath, checkout));
-					// faz o checkout do pai
-					checkout = checkout(git, revCommit.getParent(0));
-					// obtem o model do pai
-					modelStructure.setMapFatherModel(obterMapModel(gitRepoPath, checkout));
+					GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
 					// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
-					for(String src : modelStructure.getMapChildrenModel().keySet()) {
-						if ( modelStructure.getMapFatherModel().containsKey(src) ) {
-							try {
-								UMLModel umlModelChild = modelStructure.getMapChildrenModel().get(src);
-								UMLModel umlModelFather = modelStructure.getMapFatherModel().get(src);
-								UMLModelDiff diff = umlModelChild.diff(umlModelFather);
-								modelStructure.getListUmlDiff().add(new GitSrcFolderComparissonRef(umlModelChild, umlModelFather, diff));
-								if ( diff.getRefactorings().size() > 0 ) {
-									LOGGER.info(String.format("%1$d refactorings encontrados.", diff.getRefactorings().size()));
-									for(Refactoring refactoring : diff.getRefactorings()) {
-										LOGGER.info(refactoring.toString());
-									}
-								}
-							} catch(Throwable t) {
-								LOGGER.error(t.getMessage(), t);
-								continue;
-							}
-						}
-					}
+					analyseModelRefactorings(modelStructure);
+					// log
+					LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits, obterPercentual(totalCommits, countCommits)));
 				}
 			}
 		}
 	}
+
+	private double obterPercentual(int totalCommits, int countCommits) {
+		return (countCommits*1.0) / (totalCommits * 1.0) * 100.0;
+	}
+
+	private void analyseModelRefactorings(GitModelStructure modelStructure) {
+		for(String src : modelStructure.getMapChildrenModel().keySet()) {
+			if ( modelStructure.getMapFatherModel().containsKey(src) ) {
+				try {
+					UMLModel umlModelChild = modelStructure.getMapChildrenModel().get(src);
+					UMLModel umlModelFather = modelStructure.getMapFatherModel().get(src);
+					UMLModelDiff diff = umlModelChild.diff(umlModelFather);
+					modelStructure.getListUmlDiff().add(new GitSrcFolderComparissonRef(umlModelChild, umlModelFather, diff));
+					if ( diff.getRefactorings().size() > 0 ) {
+						LOGGER.info(String.format("%1$d refactorings encontrados.", diff.getRefactorings().size()));
+						for(Refactoring refactoring : diff.getRefactorings()) {
+							LOGGER.info(refactoring.toString());
+						}
+					}
+				} catch(Throwable t) {
+					LOGGER.error(t.getMessage(), t);
+					continue;
+				}
+			}
+		}
+	}
+
+private GitModelStructure buildModelStructure(File gitRepoPath, Git git,
+		RevCommit revCommit) throws GitAPIException, RefAlreadyExistsException,
+		RefNotFoundException, InvalidRefNameException,
+		CheckoutConflictException, IOException {
+	// cria objeto que armazena as comparacoes
+	GitModelStructure modelStructure = new GitModelStructure();
+	// faz checkout do filho
+	CheckoutCommand checkout = checkout(git, revCommit);
+	// obtem o map model do filho
+	modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath, checkout));
+	// faz o checkout do pai
+	checkout = checkout(git, revCommit.getParent(0));
+	// obtem o model do pai
+	modelStructure.setMapFatherModel(obterMapModel(gitRepoPath, checkout));
+	return modelStructure;
+}
 
 	private CheckoutCommand checkout(Git git, RevCommit revCommit)
 			throws GitAPIException, RefAlreadyExistsException,
@@ -159,14 +147,14 @@ public class RepositoryFinderTest {
 		for (Ref ref : call) {
 			if ( ref.getName().contains(revCommit.getName()) ) {
 				// checkout master
-				Ref refMaster = git.checkout().setName("master").call();
+				git.checkout().setName("master").call();
 				// apaga os branchs
-				List<String> deletedBranchs = git.branchDelete().setBranchNames(revCommit.getName()).call();
+				git.branchDelete().setBranchNames(revCommit.getName()).call();
 //				LOGGER.info("Deleted branchs: " + deletedBranchs);
 			}
 		}
 		
-		Ref ref = checkout.
+		checkout.
 				setCreateBranch(true).
 				setName(revCommit.getName()).
 				setStartPoint(revCommit.getName()).
@@ -259,17 +247,6 @@ public class RepositoryFinderTest {
 		return checkout.getResult().getStatus().equals(Status.OK);
 	}
 
-//	private void compareVersions(String version0SrcFolder, String version1SrcFolder) {
-//		UMLModel model0 = new ASTReader(new File(version0SrcFolder)).getUmlModel();
-//		UMLModel model1 = new ASTReader(new File(version1SrcFolder)).getUmlModel();
-//		
-//		UMLModelDiff modelDiff = model0.diff(model1);
-//		List<Refactoring> refactorings = modelDiff.getRefactorings();
-//		for (Refactoring refactoring : refactorings) {
-//			System.out.println(refactoring.toString());
-//		}
-//	}
-
 	private List<GitRepository> getJavaRepositories(GitRepositorySearchResult gitSearchResult) {
 		List<GitRepository> repositories = gitSearchResult.getRepositories();
         List<GitRepository> javaRepos = new ArrayList<GitRepository>();
@@ -279,9 +256,5 @@ public class RepositoryFinderTest {
 			}
 		}
 		return javaRepos;
-	}
-	
-	private String obterUrlTags(String userName, String repo) {
-		return String.format(GIT_HUB_QUERY_TAGS, userName, repo);
 	}
 }
