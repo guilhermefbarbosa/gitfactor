@@ -111,7 +111,7 @@ public class RepositoryFinderTest {
 			Iterable<RevCommit> call = git.log().call();
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			for (RevCommit revCommit : call) {
-				LOGGER.info("revCommit = " + revCommit.getName());
+//				LOGGER.info("revCommit = " + revCommit.getName());
 				// se possui apenas um pai, faz a comparacao
 				if ( revCommit.getParentCount() == 1 ) {
 					// cria objeto que armazena as comparacoes
@@ -127,15 +127,20 @@ public class RepositoryFinderTest {
 					// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
 					for(String src : modelStructure.getMapChildrenModel().keySet()) {
 						if ( modelStructure.getMapFatherModel().containsKey(src) ) {
-							UMLModel umlModelChild = modelStructure.getMapChildrenModel().get(src);
-							UMLModel umlModelFather = modelStructure.getMapFatherModel().get(src);
-							UMLModelDiff diff = umlModelChild.diff(umlModelFather);
-							modelStructure.getListUmlDiff().add(new GitSrcFolderComparissonRef(umlModelChild, umlModelFather, diff));
-							if ( diff.getRefactorings().size() > 0 ) {
-								LOGGER.info(String.format("%1$d refactorings encontrados.", diff.getRefactorings().size()));
-								for(Refactoring refactoring : diff.getRefactorings()) {
-									LOGGER.info(refactoring.toString());
+							try {
+								UMLModel umlModelChild = modelStructure.getMapChildrenModel().get(src);
+								UMLModel umlModelFather = modelStructure.getMapFatherModel().get(src);
+								UMLModelDiff diff = umlModelChild.diff(umlModelFather);
+								modelStructure.getListUmlDiff().add(new GitSrcFolderComparissonRef(umlModelChild, umlModelFather, diff));
+								if ( diff.getRefactorings().size() > 0 ) {
+									LOGGER.info(String.format("%1$d refactorings encontrados.", diff.getRefactorings().size()));
+									for(Refactoring refactoring : diff.getRefactorings()) {
+										LOGGER.info(refactoring.toString());
+									}
 								}
+							} catch(Throwable t) {
+								LOGGER.error(t.getMessage(), t);
+								continue;
 							}
 						}
 					}
@@ -148,7 +153,7 @@ public class RepositoryFinderTest {
 			throws GitAPIException, RefAlreadyExistsException,
 			RefNotFoundException, InvalidRefNameException,
 			CheckoutConflictException, IOException {
-		LOGGER.info("Checkout " + revCommit.getName());
+//		LOGGER.info("Checkout " + revCommit.getName());
 		CheckoutCommand checkout = git.checkout();
 		List<Ref> call = git.branchList().call();
 		for (Ref ref : call) {
@@ -157,7 +162,7 @@ public class RepositoryFinderTest {
 				Ref refMaster = git.checkout().setName("master").call();
 				// apaga os branchs
 				List<String> deletedBranchs = git.branchDelete().setBranchNames(revCommit.getName()).call();
-				LOGGER.info("Deleted branchs: " + deletedBranchs);
+//				LOGGER.info("Deleted branchs: " + deletedBranchs);
 			}
 		}
 		
@@ -166,7 +171,7 @@ public class RepositoryFinderTest {
 				setName(revCommit.getName()).
 				setStartPoint(revCommit.getName()).
 				setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM).call();
-		LOGGER.info("Ref: " + ref.getName());
+//		LOGGER.info("Ref: " + ref.getName());
 		return checkout;
 	}
 
