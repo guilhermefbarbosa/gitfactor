@@ -50,6 +50,8 @@ public class GitWorkerThread implements Runnable {
 			this.git = Git.open(gitRepoPath);
 			// analisa o commit
 			GitHubAnalyser.analyseCommit(gitRepoPath, git, totalCommits, revCommit);
+			// increment count commits
+			GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get()+1);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

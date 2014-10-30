@@ -92,7 +92,6 @@ public class GitHubAnalyser {
 			// analisa cada commit
 			for (RevCommit revCommit : call) {
 				count ++;
-//				countCommits.set(countCommits.get()+1);
 				// se possui apenas um pai, faz a comparacao
 				if ( revCommit.getParentCount() == 1 ) {
 					executor.execute(new GitWorkerThread(Constants.TEMP_FOLDER, gitRepository, totalCommits, revCommit, totalThreads, count));
