@@ -18,9 +18,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.log4j.Logger;
@@ -87,14 +84,16 @@ public class GitHubAnalyser {
 			call = git.log().call();
 			// inicializa o count commits
 			countCommits = new AtomicInteger(0);
-			int count = 0;
 			ExecutorService executor = Executors.newFixedThreadPool(totalThreads);
 			// analisa cada commit
 			for (RevCommit revCommit : call) {
-				count ++;
 				// se possui apenas um pai, faz a comparacao
 				if ( revCommit.getParentCount() == 1 ) {
-					executor.execute(new GitWorkerThread(Constants.TEMP_FOLDER, gitRepository, totalCommits, revCommit, totalThreads, count));
+//					executor.execute(new GitWorkerThread(Constants.TEMP_FOLDER, gitRepository, totalCommits, revCommit, totalThreads, count));
+					// analisa o commit
+					GitHubAnalyser.analyseCommit(gitRepoPath, git, totalCommits, revCommit);
+					// increment count commits
+					countCommits.set(countCommits.get()+1);
 					LOGGER.info("Added new thread.");
 				}
 			}
