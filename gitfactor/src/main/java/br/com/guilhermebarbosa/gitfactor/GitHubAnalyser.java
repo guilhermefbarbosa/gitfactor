@@ -23,11 +23,13 @@ import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.CheckoutResult.Status;
 import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.CannotDeleteCurrentBranchException;
 import org.eclipse.jgit.api.errors.CheckoutConflictException;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.InvalidRefNameException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
 import org.eclipse.jgit.api.errors.NoHeadException;
+import org.eclipse.jgit.api.errors.NotMergedException;
 import org.eclipse.jgit.api.errors.RefAlreadyExistsException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.api.errors.TransportException;
@@ -42,96 +44,124 @@ import com.google.common.collect.Iterables;
 
 public class GitHubAnalyser {
 	private static final Logger LOGGER = Logger.getLogger(GitHubAnalyser.class);
-	
+
 	private static AtomicInteger countCommits;
-	
-	public static void analyseGitHubByQueryUrl(String queryUrl, int totalThreads, String tmpFolder) throws IOException, GitAPIException,
-			InvalidRemoteException, TransportException, NoHeadException,
-			RefAlreadyExistsException, RefNotFoundException,
-			InvalidRefNameException, CheckoutConflictException, InterruptedException {
+
+	public static void analyseGitHubByQueryUrl(String queryUrl,
+			int totalThreads, String tmpFolder) throws IOException,
+			GitAPIException, InvalidRemoteException, TransportException,
+			NoHeadException, RefAlreadyExistsException, RefNotFoundException,
+			InvalidRefNameException, CheckoutConflictException,
+			InterruptedException {
 		RestTemplate restTemplate = new RestTemplate();
-		restTemplate.getForObject(Constants.GIT_HUB_AUTHENTICATION, Object.class);
+		restTemplate.getForObject(Constants.GIT_HUB_AUTHENTICATION,
+				Object.class);
 		// create dirs
 		new File(Constants.TEMP_FOLDER).mkdirs();
 		// aguarda 1min
 		Thread.sleep(Constants.WAIT_TIME);
-		
+
 		// get repositories
-		GitRepositorySearchResult gitSearchResult = restTemplate.getForObject(queryUrl, GitRepositorySearchResult.class);
-        LOGGER.info("Searching git repositories...");
-        List<GitRepository> javaRepos = getJavaRepositories(gitSearchResult);
-        LOGGER.info(String.format("Found %1$d repositories.", javaRepos.size()));
-        for (GitRepository gitRepository : javaRepos) {
-			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: " + gitRepository.getStars());
+		GitRepositorySearchResult gitSearchResult = restTemplate.getForObject(
+				queryUrl, GitRepositorySearchResult.class);
+		LOGGER.info("Searching git repositories...");
+		List<GitRepository> javaRepos = getJavaRepositories(gitSearchResult);
+		LOGGER.info(String.format("Found %1$d repositories.", javaRepos.size()));
+		for (GitRepository gitRepository : javaRepos) {
+			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: "
+					+ gitRepository.getStars());
 			// folder for checkout
-			File gitRepoPath = new File(Constants.TEMP_FOLDER + File.separator + gitRepository.getName());
+			File gitRepoPath = new File(Constants.TEMP_FOLDER + File.separator
+					+ gitRepository.getName());
 			// clone git repo (all tags and branches included)
-			if ( !gitRepoPath.exists() ) {
-				LOGGER.info(String.format("Cloning repository %1$s.", gitRepository.getName()));
+			if (!gitRepoPath.exists()) {
+				LOGGER.info(String.format("Cloning repository %1$s.",
+						gitRepository.getName()));
 				// clone repo to folder
-				GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
+				GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(),
+						gitRepoPath);
 			}
-			LOGGER.info(String.format("Openning repository %1$s.", gitRepository.getName()));
+			LOGGER.info(String.format("Openning repository %1$s.",
+					gitRepository.getName()));
 			// open repo
 			Git git = Git.open(gitRepoPath);
 			// get logs
 			Iterable<RevCommit> call = git.log().call();
 			int totalCommits = Iterables.size(call);
-			LOGGER.info(String.format("Getting commit logs for repository %1$s. Total of commits: %2$d", gitRepository.getName(), totalCommits));
+			LOGGER.info(String
+					.format("Getting commit logs for repository %1$s. Total of commits: %2$d",
+							gitRepository.getName(), totalCommits));
 			call = git.log().call();
 			// inicializa o count commits
 			countCommits = new AtomicInteger(0);
 			// analisa cada commit
 			for (RevCommit revCommit : call) {
 				// se possui apenas um pai, faz a comparacao
-				if ( revCommit.getParentCount() == 1 ) {
-//					executor.execute(new GitWorkerThread(Constants.TEMP_FOLDER, gitRepository, totalCommits, revCommit, totalThreads, count));
+				if (revCommit.getParentCount() == 1) {
+					// executor.execute(new
+					// GitWorkerThread(Constants.TEMP_FOLDER, gitRepository,
+					// totalCommits, revCommit, totalThreads, count));
 					// analisa o commit
-					GitHubAnalyser.analyseCommit(gitRepoPath, git, totalCommits, revCommit);
+					GitHubAnalyser.analyseCommit(gitRepoPath, git,
+							totalCommits, revCommit);
 					// increment count commits
-					countCommits.set(countCommits.get()+1);
+					countCommits.set(countCommits.get() + 1);
 				}
 			}
 		}
 	}
 
 	public static void analyseCommit(File gitRepoPath, Git git,
-			int totalCommits, RevCommit revCommit)
-			throws GitAPIException, RefAlreadyExistsException,
-			RefNotFoundException, InvalidRefNameException,
-			CheckoutConflictException, IOException {
+			int totalCommits, RevCommit revCommit) throws GitAPIException,
+			RefAlreadyExistsException, RefNotFoundException,
+			InvalidRefNameException, CheckoutConflictException, IOException {
 		long init = System.currentTimeMillis();
-		GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
+		GitModelStructure modelStructure = buildModelStructure(gitRepoPath,
+				git, revCommit);
 		long end = System.currentTimeMillis();
-		LOGGER.info(String.format("Tempo total buildModelStructure(): %1$s [s].", ((end-init)/1000.0)));
+		LOGGER.info(String.format(
+				"Tempo total buildModelStructure(): %1$s [s].",
+				((end - init) / 1000.0)));
 		init = System.currentTimeMillis();
-		// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
+		// para cada entrada do filho, verifica se existe uma entrada para o pai
+		// e compara
 		analyseModelRefactorings(modelStructure);
 		end = System.currentTimeMillis();
-		LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end-init)/1000.0)));
+		LOGGER.info(String.format(
+				"Tempo total analyseModelRefactorings(): %1$s [s].",
+				((end - init) / 1000.0)));
 		// log
-		LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits.get(), obterPercentual(totalCommits, countCommits.get())));
+		LOGGER.info(String.format("%1$d commits analysed. %2$s",
+				countCommits.get(),
+				obterPercentual(totalCommits, countCommits.get())));
 	}
 
 	private static double obterPercentual(int totalCommits, int countCommits) {
-		return (countCommits*1.0) / (totalCommits * 1.0) * 100.0;
+		return (countCommits * 1.0) / (totalCommits * 1.0) * 100.0;
 	}
 
-	private static void analyseModelRefactorings(GitModelStructure modelStructure) {
-		for(String src : modelStructure.getMapChildrenModel().keySet()) {
-			if ( modelStructure.getMapFatherModel().containsKey(src) ) {
+	private static void analyseModelRefactorings(
+			GitModelStructure modelStructure) {
+		for (String src : modelStructure.getMapChildrenModel().keySet()) {
+			if (modelStructure.getMapFatherModel().containsKey(src)) {
 				try {
-					UMLModel umlModelChild = modelStructure.getMapChildrenModel().get(src);
-					UMLModel umlModelFather = modelStructure.getMapFatherModel().get(src);
+					UMLModel umlModelChild = modelStructure
+							.getMapChildrenModel().get(src);
+					UMLModel umlModelFather = modelStructure
+							.getMapFatherModel().get(src);
 					UMLModelDiff diff = umlModelChild.diff(umlModelFather);
-					modelStructure.getListUmlDiff().add(new GitSrcFolderComparissonRef(umlModelChild, umlModelFather, diff));
-					if ( diff.getRefactorings().size() > 0 ) {
-						LOGGER.info(String.format("%1$d refactorings encontrados.", diff.getRefactorings().size()));
-						for(Refactoring refactoring : diff.getRefactorings()) {
+					modelStructure.getListUmlDiff().add(
+							new GitSrcFolderComparissonRef(umlModelChild,
+									umlModelFather, diff));
+					if (diff.getRefactorings().size() > 0) {
+						LOGGER.info(String.format(
+								"%1$d refactorings encontrados.", diff
+										.getRefactorings().size()));
+						for (Refactoring refactoring : diff.getRefactorings()) {
 							LOGGER.info(refactoring.toString());
 						}
 					}
-				} catch(Throwable t) {
+				} catch (Throwable t) {
 					LOGGER.error(t.getMessage(), t);
 					continue;
 				}
@@ -139,58 +169,74 @@ public class GitHubAnalyser {
 		}
 	}
 
-private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
-		RevCommit revCommit) throws GitAPIException, RefAlreadyExistsException,
-		RefNotFoundException, InvalidRefNameException,
-		CheckoutConflictException, IOException {
-	// cria objeto que armazena as comparacoes
-	GitModelStructure modelStructure = new GitModelStructure();
-	// faz checkout do filho
-	CheckoutCommand checkout = checkout(git, revCommit);
-	// obtem o map model do filho
-	modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath, checkout));
-	// faz o checkout do pai
-	checkout = checkout(git, revCommit.getParent(0));
-	// obtem o model do pai
-	modelStructure.setMapFatherModel(obterMapModel(gitRepoPath, checkout));
-	return modelStructure;
-}
+	private static GitModelStructure buildModelStructure(File gitRepoPath,
+			Git git, RevCommit revCommit) throws GitAPIException,
+			RefAlreadyExistsException, RefNotFoundException,
+			InvalidRefNameException, CheckoutConflictException, IOException {
+		// cria objeto que armazena as comparacoes
+		GitModelStructure modelStructure = new GitModelStructure();
+		// faz checkout do filho
+		CheckoutCommand checkout = checkout(git, revCommit);
+		// obtem o map model do filho
+		modelStructure
+				.setMapChildrenModel(obterMapModel(gitRepoPath, checkout));
+		// apaga o branch
+		deleteBranchByCommit(git, revCommit);
+		// faz o checkout do pai
+		checkout = checkout(git, revCommit.getParent(0));
+		// obtem o model do pai
+		modelStructure.setMapFatherModel(obterMapModel(gitRepoPath, checkout));
+		// apaga o branch
+		return modelStructure;
+	}
 
 	private static CheckoutCommand checkout(Git git, RevCommit revCommit)
 			throws GitAPIException, RefAlreadyExistsException,
 			RefNotFoundException, InvalidRefNameException,
 			CheckoutConflictException, IOException {
 		CheckoutCommand checkout = git.checkout();
-		List<Ref> call = git.branchList().call();
-		for (Ref ref : call) {
-			if ( ref.getName().contains(revCommit.getName()) ) {
-				// checkout master
-				git.checkout().setName("master").call();
-				LOGGER.info("Checkout master branch.");
-				// apaga os branchs
-				List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
-				LOGGER.info("Deleted branchs: " + deletedBranches);
-			}
-		}
-		
-		Ref ref = checkout.
-				setCreateBranch(true).
-				setName(revCommit.getName()).
-				setStartPoint(revCommit.getName()).
-				setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM).call();
+		deleteBranchByCommit(git, revCommit);
+
+		Ref ref = checkout.setCreateBranch(true).setName(revCommit.getName())
+				.setStartPoint(revCommit.getName())
+				.setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM).call();
 		LOGGER.info("Ref branch checkout: " + ref.getName());
 		return checkout;
 	}
 
-	private static Map<String, UMLModel> obterMapModel(File gitRepoPath, CheckoutCommand checkout) {
+	private static void deleteBranchByCommit(Git git, RevCommit revCommit)
+			throws GitAPIException, RefAlreadyExistsException,
+			RefNotFoundException, InvalidRefNameException,
+			CheckoutConflictException, NotMergedException,
+			CannotDeleteCurrentBranchException {
+		List<Ref> call = git.branchList().call();
+		for (Ref ref : call) {
+			if (ref.getName().contains(revCommit.getName())) {
+				// checkout master
+				git.checkout().setName("master").call();
+				LOGGER.info("Checkout master branch.");
+				// apaga os branchs
+				List<String> deletedBranches = git.branchDelete()
+						.setBranchNames(revCommit.getName()).call();
+				LOGGER.info("Deleted branchs: " + deletedBranches);
+			}
+		}
+	}
+
+	private static Map<String, UMLModel> obterMapModel(File gitRepoPath,
+			CheckoutCommand checkout) {
 		Map<String, UMLModel> mapModel = new HashMap<String, UMLModel>();
-		if ( isCheckoutOk(checkout) ) {
+		if (isCheckoutOk(checkout)) {
 			// getting UML Model
-			List<String> list1 = new ArrayList<String>(getSrcFolder(gitRepoPath, new HashSet<String>()));
+			List<String> list1 = new ArrayList<String>(getSrcFolder(
+					gitRepoPath, new HashSet<String>()));
 			for (String srcFolder : list1) {
 				// cria um objeto para armazenar a comparacao
-				UMLModel model = new ASTReader(new File(srcFolder)).getUmlModel();
-				String relativePathDir = srcFolder.substring(srcFolder.indexOf(gitRepoPath.getAbsolutePath())+gitRepoPath.getAbsolutePath().length());
+				UMLModel model = new ASTReader(new File(srcFolder))
+						.getUmlModel();
+				String relativePathDir = srcFolder.substring(srcFolder
+						.indexOf(gitRepoPath.getAbsolutePath())
+						+ gitRepoPath.getAbsolutePath().length());
 				// LOGGER.info("UMLModel -> " + relativePathDir);
 				mapModel.put(relativePathDir, model);
 			}
@@ -199,12 +245,12 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 	}
 
 	private static Set<String> getSrcFolder(File path, Set<String> pathNames) {
-		if ( path.isDirectory() && existsJavaFiles(path) ) {
+		if (path.isDirectory() && existsJavaFiles(path)) {
 			String baseJavaSrcFolder = getBaseJavaSrcFolder(path);
-			if ( baseJavaSrcFolder != null ) {
+			if (baseJavaSrcFolder != null) {
 				pathNames.add(baseJavaSrcFolder);
 			}
-		} else if ( path.isDirectory() ) {
+		} else if (path.isDirectory()) {
 			File[] listFiles = path.listFiles();
 			for (File file : listFiles) {
 				getSrcFolder(file, pathNames);
@@ -219,13 +265,14 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 		// get dir without package declaration
 		File[] listFiles = path.listFiles();
 		for (File file : listFiles) {
-			if ( file.getAbsolutePath().endsWith(".java") ) {
+			if (file.getAbsolutePath().endsWith(".java")) {
 				String packageStr = obterPackageJavaFile(file);
-				if ( StringUtils.isEmpty(packageStr) ) {
+				if (StringUtils.isEmpty(packageStr)) {
 					continue;
 				}
 				packageStr = packageStr.replaceAll("\\.", File.separator);
-				String pathForSrcFolder = path.getAbsolutePath().replaceAll(packageStr, "");
+				String pathForSrcFolder = path.getAbsolutePath().replaceAll(
+						packageStr, "");
 				return pathForSrcFolder;
 			}
 		}
@@ -237,12 +284,15 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 		String packageStr = null;
 		try {
 			FileInputStream fileInputStream = new FileInputStream(path);
-			InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
+			InputStreamReader inputStreamReader = new InputStreamReader(
+					fileInputStream);
 			bf = new BufferedReader(inputStreamReader);
 			String line;
 			while ((line = bf.readLine()) != null) {
-				if ( line.startsWith("package ") ) {
-					packageStr = line.substring(line.indexOf("package ")+"package ".length(), line.indexOf(";")).trim();
+				if (line.startsWith("package ")) {
+					packageStr = line.substring(
+							line.indexOf("package ") + "package ".length(),
+							line.indexOf(";")).trim();
 				}
 			}
 			fileInputStream.close();
@@ -257,7 +307,7 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 	private static boolean existsJavaFiles(File path) {
 		File[] listFiles = path.listFiles();
 		for (File file : listFiles) {
-			if ( file.getAbsolutePath().endsWith(".java") ) {
+			if (file.getAbsolutePath().endsWith(".java")) {
 				return true;
 			}
 		}
@@ -268,21 +318,23 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 		return checkout.getResult().getStatus().equals(Status.OK);
 	}
 
-	private static List<GitRepository> getJavaRepositories(GitRepositorySearchResult gitSearchResult) {
+	private static List<GitRepository> getJavaRepositories(
+			GitRepositorySearchResult gitSearchResult) {
 		List<GitRepository> repositories = gitSearchResult.getRepositories();
-        List<GitRepository> javaRepos = new ArrayList<GitRepository>();
-        for (GitRepository gitRepository : repositories) {
-			if ( gitRepository.getStars() != null && Integer.parseInt(gitRepository.getStars()) >= 1000 ) {
+		List<GitRepository> javaRepos = new ArrayList<GitRepository>();
+		for (GitRepository gitRepository : repositories) {
+			if (gitRepository.getStars() != null
+					&& Integer.parseInt(gitRepository.getStars()) >= 1000) {
 				javaRepos.add(gitRepository);
 			}
 		}
 		return javaRepos;
 	}
-	
+
 	public static void registerNewCommit() {
-		countCommits.set(countCommits.get()+1);
+		countCommits.set(countCommits.get() + 1);
 	}
-	
+
 	public static AtomicInteger getCountCommits() {
 		return countCommits;
 	}
