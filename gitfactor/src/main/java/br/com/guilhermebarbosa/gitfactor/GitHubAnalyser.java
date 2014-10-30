@@ -16,6 +16,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.log4j.Logger;
 import org.eclipse.jgit.api.CheckoutCommand;
@@ -36,13 +42,16 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
+import br.com.guilhermebarbosa.git.thread.GitWorkerThread;
 
 import com.google.common.collect.Iterables;
 
 public class GitHubAnalyser {
 	private static final Logger LOGGER = Logger.getLogger(GitHubAnalyser.class);
 	
-	public static void analyseGitHubByQueryUrl(String queryUrl) throws IOException, GitAPIException,
+	private static AtomicInteger countCommits;
+	
+	public static void analyseGitHubByQueryUrl(String queryUrl, int totalThreads, String tmpFolder) throws IOException, GitAPIException,
 			InvalidRemoteException, TransportException, NoHeadException,
 			RefAlreadyExistsException, RefNotFoundException,
 			InvalidRefNameException, CheckoutConflictException, InterruptedException {
@@ -76,26 +85,44 @@ public class GitHubAnalyser {
 			int totalCommits = Iterables.size(call);
 			LOGGER.info(String.format("Getting commit logs for repository %1$s. Total of commits: %2$d", gitRepository.getName(), totalCommits));
 			call = git.log().call();
-			int countCommits = 0;
+			// inicializa o count commits
+			countCommits = new AtomicInteger(0);
+			int count = 0;
+			ExecutorService executor = Executors.newFixedThreadPool(totalThreads);
+			// analisa cada commit
 			for (RevCommit revCommit : call) {
-				countCommits ++;
-//				LOGGER.info("revCommit = " + revCommit.getName());
+				count ++;
+//				countCommits.set(countCommits.get()+1);
 				// se possui apenas um pai, faz a comparacao
 				if ( revCommit.getParentCount() == 1 ) {
-					long init = System.currentTimeMillis();
-					GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
-					long end = System.currentTimeMillis();
-					LOGGER.info(String.format("Tempo total buildModelStructure(): %1$s [s].", ((end-init)/1000.0)));
-					init = System.currentTimeMillis();
-					// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
-					analyseModelRefactorings(modelStructure);
-					end = System.currentTimeMillis();
-					LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end-init)/1000.0)));
-					// log
-					LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits, obterPercentual(totalCommits, countCommits)));
+					executor.execute(new GitWorkerThread(Constants.TEMP_FOLDER, gitRepository, totalCommits, revCommit, totalThreads, count));
+					LOGGER.info("Added new thread.");
 				}
 			}
+			executor.shutdown();
+			while (!executor.isTerminated()) {
+//				LOGGER.info("Not yet terminated.");
+			}
+			LOGGER.info("Finished all threads");
 		}
+	}
+
+	public static void analyseCommit(File gitRepoPath, Git git,
+			int totalCommits, RevCommit revCommit)
+			throws GitAPIException, RefAlreadyExistsException,
+			RefNotFoundException, InvalidRefNameException,
+			CheckoutConflictException, IOException {
+		long init = System.currentTimeMillis();
+		GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
+		long end = System.currentTimeMillis();
+		LOGGER.info(String.format("Tempo total buildModelStructure(): %1$s [s].", ((end-init)/1000.0)));
+		init = System.currentTimeMillis();
+		// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
+		analyseModelRefactorings(modelStructure);
+		end = System.currentTimeMillis();
+		LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end-init)/1000.0)));
+		// log
+		LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits, obterPercentual(totalCommits, countCommits.get())));
 	}
 
 	private static double obterPercentual(int totalCommits, int countCommits) {
@@ -145,25 +172,25 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 			throws GitAPIException, RefAlreadyExistsException,
 			RefNotFoundException, InvalidRefNameException,
 			CheckoutConflictException, IOException {
-//		LOGGER.info("Checkout " + revCommit.getName());
 		CheckoutCommand checkout = git.checkout();
 		List<Ref> call = git.branchList().call();
 		for (Ref ref : call) {
 			if ( ref.getName().contains(revCommit.getName()) ) {
 				// checkout master
 				git.checkout().setName("master").call();
+				LOGGER.info("Checkout master branch.");
 				// apaga os branchs
-				git.branchDelete().setBranchNames(revCommit.getName()).call();
-//				LOGGER.info("Deleted branchs: " + deletedBranchs);
+				List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
+				LOGGER.info("Deleted branchs: " + deletedBranches);
 			}
 		}
 		
-		checkout.
+		Ref ref = checkout.
 				setCreateBranch(true).
 				setName(revCommit.getName()).
 				setStartPoint(revCommit.getName()).
 				setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM).call();
-//		LOGGER.info("Ref: " + ref.getName());
+		LOGGER.info("Ref branch checkout: " + ref.getName());
 		return checkout;
 	}
 
@@ -260,5 +287,13 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 			}
 		}
 		return javaRepos;
+	}
+	
+	public static void registerNewCommit() {
+		countCommits.set(countCommits.get()+1);
+	}
+	
+	public static AtomicInteger getCountCommits() {
+		return countCommits;
 	}
 }

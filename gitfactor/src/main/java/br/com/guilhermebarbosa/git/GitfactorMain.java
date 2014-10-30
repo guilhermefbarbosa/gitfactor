@@ -6,7 +6,9 @@ import br.com.guilhermebarbosa.gitfactor.GitHubAnalyser;
 public class GitfactorMain {
 	public static void main(String[] args) {
 		try {
-			GitHubAnalyser.analyseGitHubByQueryUrl(Constants.GIT_HUB_QUERY_REPOS);
+			int totalThreads = Integer.parseInt(args[0]);
+			String tmpFolder = args[1];
+			GitHubAnalyser.analyseGitHubByQueryUrl(Constants.GIT_HUB_QUERY_REPOS, totalThreads, tmpFolder);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
