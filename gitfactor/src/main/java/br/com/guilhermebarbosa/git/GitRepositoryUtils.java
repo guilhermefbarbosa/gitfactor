@@ -1,36 +1,42 @@
 package br.com.guilhermebarbosa.git;
 
 import java.io.File;
-import java.io.IOException;
 
+import org.apache.log4j.Logger;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.api.errors.InvalidRemoteException;
-import org.eclipse.jgit.api.errors.TransportException;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 
 public class GitRepositoryUtils {
-	public static void cloneGitRepo(String remoteUrl, File localPath) throws IOException, GitAPIException, InvalidRemoteException, TransportException {
-		// recria pasta com conteúdo vazio
-		recreateFolders(localPath);
-        // then clone
-        System.out.println("Cloning from " + remoteUrl + " to " + localPath);
-        Git.cloneRepository()
-                .setURI(remoteUrl)
-                .setDirectory(localPath)
-                .call();
-
-        // now open the created repository
-        FileRepositoryBuilder builder = new FileRepositoryBuilder();
-        Repository repository = builder.setGitDir(localPath)
-                .readEnvironment() // scan environment GIT_* variables
-                .findGitDir() // scan up the file system tree
-                .build();
-
-        System.out.println("Having repository: " + repository.getDirectory());
-
-        repository.close();
+	private static final Logger LOGGER = Logger.getLogger(GitRepositoryUtils.class);
+	
+	public static Git cloneGitRepo(String remoteUrl, File localPath) throws Exception {
+		// se existir, apenas abre
+		if ( localPath.exists() ) {
+			LOGGER.info(String.format("Repository %1$s already exists.", localPath));
+			LOGGER.info(String.format("Openning repository %1$s.", localPath));
+			// open repo
+			return Git.open(localPath);
+		} 
+		// senao faz checkout
+		else {
+			// recria pasta com conteúdo vazio
+			recreateFolders(localPath);
+			// then clone
+			LOGGER.info("Cloning from " + remoteUrl + " to " + localPath);
+			Git git = Git.cloneRepository()
+					.setURI(remoteUrl)
+					.setDirectory(localPath)
+					.call();
+			git.close();
+			FileRepositoryBuilder builder = new FileRepositoryBuilder();
+	        Repository repository = builder.setGitDir(localPath)
+	                .readEnvironment() // scan environment GIT_* variables
+	                .findGitDir() // scan up the file system tree
+	                .build();
+	        repository.close();
+	        return Git.open(localPath);
+		}
 	}
 
 	private static void recreateFolders(File localPath) {
