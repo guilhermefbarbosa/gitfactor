@@ -22,13 +22,6 @@ import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.CheckoutResult.Status;
 import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.errors.CannotDeleteCurrentBranchException;
-import org.eclipse.jgit.api.errors.CheckoutConflictException;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.api.errors.InvalidRefNameException;
-import org.eclipse.jgit.api.errors.NotMergedException;
-import org.eclipse.jgit.api.errors.RefAlreadyExistsException;
-import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.springframework.util.StringUtils;
@@ -70,6 +63,8 @@ public class GitHubAnalyser {
 					// increment count commits
 					GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
 				}
+				// give a hint to garbage collection
+				System.gc();
 			}
 			LOGGER.info("Finished all threads");
 		}
