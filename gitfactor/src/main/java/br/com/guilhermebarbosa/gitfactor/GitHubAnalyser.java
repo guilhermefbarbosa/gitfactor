@@ -122,7 +122,7 @@ public class GitHubAnalyser {
 		end = System.currentTimeMillis();
 		LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end-init)/1000.0)));
 		// log
-		LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits, obterPercentual(totalCommits, countCommits.get())));
+		LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits.get(), obterPercentual(totalCommits, countCommits.get())));
 	}
 
 	private static double obterPercentual(int totalCommits, int countCommits) {
