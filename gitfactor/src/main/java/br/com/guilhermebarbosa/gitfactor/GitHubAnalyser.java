@@ -16,8 +16,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.log4j.Logger;
@@ -39,7 +37,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
-import br.com.guilhermebarbosa.git.thread.GitWorkerThread;
 
 import com.google.common.collect.Iterables;
 
@@ -84,7 +81,6 @@ public class GitHubAnalyser {
 			call = git.log().call();
 			// inicializa o count commits
 			countCommits = new AtomicInteger(0);
-			ExecutorService executor = Executors.newFixedThreadPool(totalThreads);
 			// analisa cada commit
 			for (RevCommit revCommit : call) {
 				// se possui apenas um pai, faz a comparacao
@@ -94,14 +90,8 @@ public class GitHubAnalyser {
 					GitHubAnalyser.analyseCommit(gitRepoPath, git, totalCommits, revCommit);
 					// increment count commits
 					countCommits.set(countCommits.get()+1);
-					LOGGER.info("Added new thread.");
 				}
 			}
-			executor.shutdown();
-			while (!executor.isTerminated()) {
-//				LOGGER.info("Not yet terminated.");
-			}
-			LOGGER.info("Finished all threads");
 		}
 	}
 
@@ -235,9 +225,7 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 					continue;
 				}
 				packageStr = packageStr.replaceAll("\\.", File.separator);
-//				System.out.println(packageStr);
 				String pathForSrcFolder = path.getAbsolutePath().replaceAll(packageStr, "");
-//				System.out.println(pathForSrcFolder);
 				return pathForSrcFolder;
 			}
 		}
@@ -248,13 +236,17 @@ private static GitModelStructure buildModelStructure(File gitRepoPath, Git git,
 		BufferedReader bf = null;
 		String packageStr = null;
 		try {
-			bf = new BufferedReader(new InputStreamReader(new FileInputStream(path)));
+			FileInputStream fileInputStream = new FileInputStream(path);
+			InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
+			bf = new BufferedReader(inputStreamReader);
 			String line;
 			while ((line = bf.readLine()) != null) {
 				if ( line.startsWith("package ") ) {
 					packageStr = line.substring(line.indexOf("package ")+"package ".length(), line.indexOf(";")).trim();
 				}
 			}
+			fileInputStream.close();
+			inputStreamReader.close();
 			bf.close();
 		} catch (Exception e) {
 			e.printStackTrace();
