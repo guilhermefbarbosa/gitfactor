@@ -24,11 +24,10 @@ public class GitRepositoryUtils {
 			recreateFolders(localPath);
 			// then clone
 			LOGGER.info("Cloning from " + remoteUrl + " to " + localPath);
-			Git git = Git.cloneRepository()
+			Git.cloneRepository()
 					.setURI(remoteUrl)
 					.setDirectory(localPath)
 					.call();
-			git.close();
 			FileRepositoryBuilder builder = new FileRepositoryBuilder();
 	        Repository repository = builder.setGitDir(localPath)
 	                .readEnvironment() // scan environment GIT_* variables

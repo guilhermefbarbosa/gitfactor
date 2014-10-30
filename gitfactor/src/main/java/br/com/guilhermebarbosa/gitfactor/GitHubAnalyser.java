@@ -115,7 +115,7 @@ public class GitHubAnalyser {
 		end = System.currentTimeMillis();
 		LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end - init) / 1000.0)));
 		// log
-		LOGGER.info(String.format("%1$d commits analysed. %2$s", countCommits.get()));
+		LOGGER.info(String.format("%1$d commits analysed.", countCommits.get()));
 	}
 
 	private static void analyseModelRefactorings(GitModelStructure modelStructure) {
@@ -143,38 +143,36 @@ public class GitHubAnalyser {
 		// cria objeto que armazena as comparacoes
 		GitModelStructure modelStructure = new GitModelStructure();
 		// faz checkout do filho
-		CheckoutCommand checkout = checkout(git, revCommit);
+		checkout(git, revCommit);
 		// obtem o map model do filho
-		modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath, checkout));
+		modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath));
 		// faz o checkout do pai
-		checkout = checkout(git, revCommit.getParent(0));
+		checkout(git, revCommit.getParent(0));
 		// obtem o model do pai
-		modelStructure.setMapFatherModel(obterMapModel(gitRepoPath, checkout));
+		modelStructure.setMapFatherModel(obterMapModel(gitRepoPath));
 		return modelStructure;
 	}
 
-	private static CheckoutCommand checkout(Git git, RevCommit revCommit) throws Exception {
-		CheckoutCommand checkout = git.checkout();
+	private static Ref checkout(Git git, RevCommit revCommit) throws Exception {
 		// apaga a branch
-		deleteBranch(git, revCommit, checkout);
+		deleteBranch(git, revCommit);
 		// cria a branch
-		Ref ref = checkout.setCreateBranch(true).setName(revCommit.getName())
+		Ref ref = git
+				.checkout()
+				.setCreateBranch(true)
+				.setName(revCommit.getName())
 				.setStartPoint(revCommit.getName())
 				.setUpstreamMode(SetupUpstreamMode.SET_UPSTREAM).call();
 		LOGGER.info("Ref branch checkout: " + ref.getName());
-		return checkout;
+		return ref;
 	}
 
-	private static void deleteBranch(Git git, RevCommit revCommit,
-			CheckoutCommand checkout) throws GitAPIException,
-			RefAlreadyExistsException, RefNotFoundException,
-			InvalidRefNameException, CheckoutConflictException,
-			NotMergedException, CannotDeleteCurrentBranchException {
+	private static void deleteBranch(Git git, RevCommit revCommit) throws Exception {
 		List<Ref> call = git.branchList().call();
 		for (Ref ref : call) {
 			if (ref.getName().contains(revCommit.getName())) {
 				// checkout master
-				checkout.setName("master").call();
+				git.checkout().setName("master").call();
 				LOGGER.info("Checkout master branch.");
 				// apaga os branchs
 				List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
@@ -183,9 +181,9 @@ public class GitHubAnalyser {
 		}
 	}
 
-	private static Map<String, UMLModel> obterMapModel(File gitRepoPath, CheckoutCommand checkout) {
+	private static Map<String, UMLModel> obterMapModel(File gitRepoPath) {
 		Map<String, UMLModel> mapModel = new HashMap<String, UMLModel>();
-		if (isCheckoutOk(checkout)) {
+//		if (isCheckoutOk(checkout)) {
 			// getting UML Model
 			List<String> list1 = new ArrayList<String>(getSrcFolder(gitRepoPath, new HashSet<String>()));
 			for (String srcFolder : list1) {
@@ -195,7 +193,7 @@ public class GitHubAnalyser {
 				// LOGGER.info("UMLModel -> " + relativePathDir);
 				mapModel.put(relativePathDir, model);
 			}
-		}
+//		}
 		return mapModel;
 	}
 
