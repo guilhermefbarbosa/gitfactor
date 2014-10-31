@@ -9,6 +9,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,16 +28,20 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriTemplate;
 
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
+
+import com.google.common.collect.Iterables;
 
 public class GitHubAnalyser {
 	private static final Logger LOGGER = Logger.getLogger(GitHubAnalyser.class);
 
 	private static AtomicInteger countCommits;
 
-	public static void analyseGitHubByQueryUrl(String queryUrl, int totalThreads, String tmpFolder) throws Exception {
+	public static void analyseGitHubByQueryUrl(String queryUrl, int totalThreads, String tmpFolder, boolean analyse) throws Exception {
 		// search for repositories
 		List<GitRepository> javaRepos = searchRepositories(queryUrl);
 		// wait some time
@@ -43,6 +50,9 @@ public class GitHubAnalyser {
 		new File(Constants.TEMP_FOLDER).mkdirs();
 		// git repo
 		Git git = null;
+		int totalCommits = 0;
+		// total of repositories
+		LOGGER.info(String.format("Total repositories: %1$d", javaRepos.size()));
 		for (GitRepository gitRepository : javaRepos) {
 			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: " + gitRepository.getStars());
 			// folder for checkout
@@ -52,25 +62,35 @@ public class GitHubAnalyser {
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			Iterable<RevCommit> call = git.log().call();
-			// inicializa o count commits
-			countCommits = new AtomicInteger(0);
-			// analisa cada commit
-			for (RevCommit revCommit : call) {
-				// se possui apenas um pai, faz a comparacao
-				if (revCommit.getParentCount() == 1) {
-					// analisa o commit
-					GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
-					// increment count commits
-					GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
+			int commits = Iterables.size(git.log().call());
+			totalCommits += commits;
+			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
+			if ( analyse ) {
+				// inicializa o count commits
+				countCommits = new AtomicInteger(0);
+				// analisa cada commit
+				for (RevCommit revCommit : call) {
+					// se possui apenas um pai, faz a comparacao
+					if (revCommit.getParentCount() == 1) {
+						// analisa o commit
+						GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
+						// increment count commits
+						GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
+					}
+					// give a hint to garbage collection
+					System.gc();
 				}
-				// give a hint to garbage collection
-				System.gc();
 			}
-			LOGGER.info("Finished all threads");
+			// excluir o repositorio
+			boolean delete = gitRepoPath.delete();
+			if ( delete ) {
+				LOGGER.info(String.format("Repository deleted sucessfull: %1$s.", gitRepoPath.getAbsolutePath()));
+			}
 		}
+		LOGGER.info(String.format("Total Commits: %1$d.", totalCommits));
 	}
 
-	private static List<GitRepository> searchRepositories(String queryUrl) {
+	private static List<GitRepository> searchRepositories(String queryUrl) throws RestClientException, UnsupportedEncodingException {
 		GitRepositorySearchResult gitSearchResult = queryGitHub(queryUrl);
 		LOGGER.info("Searching git repositories...");
 		List<GitRepository> javaRepos = filterRepositories(gitSearchResult);
@@ -82,19 +102,32 @@ public class GitHubAnalyser {
 		List<GitRepository> repositories = gitSearchResult.getRepositories();
 		List<GitRepository> javaRepos = new ArrayList<GitRepository>();
 		for (GitRepository gitRepository1 : repositories) {
-			if (gitRepository1.getStars() != null && Integer.parseInt(gitRepository1.getStars()) >= 1000) {
-				javaRepos.add(gitRepository1);
-			}
+			javaRepos.add(gitRepository1);
 		}
 		return javaRepos;
 	}
 
-	private static GitRepositorySearchResult queryGitHub(String queryUrl) {
+	private static GitRepositorySearchResult queryGitHub(String queryUrl) throws RestClientException, UnsupportedEncodingException {
 		RestTemplate restTemplate = new RestTemplate();
 		restTemplate.getForObject(Constants.GIT_HUB_AUTHENTICATION, Object.class);
 		// get repositories
-		GitRepositorySearchResult gitSearchResult = restTemplate.getForObject(queryUrl, GitRepositorySearchResult.class);
-		return gitSearchResult;
+		return searchRepositoriesWithPagination(queryUrl, restTemplate);
+	}
+
+	private static GitRepositorySearchResult searchRepositoriesWithPagination(
+			String queryUrl, RestTemplate restTemplate) {
+		GitRepositorySearchResult searchResult = restTemplate.getForObject(queryUrl, GitRepositorySearchResult.class);
+		// pagination (100 per page)
+		if ( Integer.parseInt(searchResult.getTotalResults()) > 100 ) {
+			int pagesToGet = new Double(Math.ceil((Integer.parseInt(searchResult.getTotalResults()) / 100.0))).intValue();
+			GitRepositorySearchResult searchResult2 = null;
+			for(int i = 2; i <= pagesToGet; i++) {
+				String query = queryUrl + "&page=" + i;
+				searchResult2 = restTemplate.getForObject(query, GitRepositorySearchResult.class);
+				searchResult.getRepositories().addAll(searchResult2.getRepositories());
+			}
+		}
+		return searchResult;
 	}
 
 	public static void analyseCommit(File gitRepoPath, Git git, RevCommit revCommit) throws Exception {
