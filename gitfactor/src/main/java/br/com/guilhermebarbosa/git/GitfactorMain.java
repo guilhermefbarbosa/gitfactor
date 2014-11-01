@@ -8,7 +8,8 @@ public class GitfactorMain {
 		try {
 			int totalThreads = Integer.parseInt(args[0]);
 			String tmpFolder = args[1];
-			GitHubAnalyser.analyseGitHubByQueryUrl(Constants.GIT_HUB_QUERY_REPOS, totalThreads, tmpFolder, false);
+			Boolean analyse = Boolean.valueOf(args[2]);
+			GitHubAnalyser.analyseGitHubByQueryUrl(Constants.GIT_HUB_QUERY_REPOS, totalThreads, tmpFolder, analyse);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
