@@ -142,7 +142,7 @@ public class GitHubAnalyser {
 		Commit commit;
 		// save the commit
 		commit = new Commit();
-		commit.setDate(new Date(revCommit.getCommitTime()));
+		commit.setDate(new Date(revCommit.getCommitTime()*1000));
 		commit.setHash(revCommit.getName());
 		commit.setMessage(revCommit.getFullMessage());
 		commit.setRepository(repository);
