@@ -1,7 +1,6 @@
 package br.com.guilhermebarbosa.gitfactor;
 
 public class Constants {
-	public static final String TEMP_FOLDER = "/var/tmp/git";
 	public static final int WAIT_TIME = 30000;
 	// java repositories having more than 1000 stars 
 	public static final String GIT_HUB_QUERY_REPOS = "https://api.github.com/search/repositories?q=language:java stars:>1000&sort=stars&order=desc&per_page=100";

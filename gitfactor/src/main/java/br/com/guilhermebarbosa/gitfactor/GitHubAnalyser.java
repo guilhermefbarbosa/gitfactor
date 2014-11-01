@@ -10,8 +10,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,7 +28,6 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriTemplate;
 
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
 
@@ -47,7 +44,7 @@ public class GitHubAnalyser {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
 		// create dirs
-		new File(Constants.TEMP_FOLDER).mkdirs();
+		new File(tmpFolder).mkdirs();
 		// git repo
 		Git git = null;
 		int totalCommits = 0;
@@ -56,7 +53,7 @@ public class GitHubAnalyser {
 		for (GitRepository gitRepository : javaRepos) {
 			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: " + gitRepository.getStars());
 			// folder for checkout
-			File gitRepoPath = new File(Constants.TEMP_FOLDER + File.separator + gitRepository.getName());
+			File gitRepoPath = new File(tmpFolder + File.separator + gitRepository.getName());
 			// clone repo to folder
 			git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			// get logs
@@ -93,17 +90,8 @@ public class GitHubAnalyser {
 	private static List<GitRepository> searchRepositories(String queryUrl) throws RestClientException, UnsupportedEncodingException {
 		GitRepositorySearchResult gitSearchResult = queryGitHub(queryUrl);
 		LOGGER.info("Searching git repositories...");
-		List<GitRepository> javaRepos = filterRepositories(gitSearchResult);
+		List<GitRepository> javaRepos = gitSearchResult.getRepositories();
 		LOGGER.info(String.format("Found %1$d repositories.", javaRepos.size()));
-		return javaRepos;
-	}
-
-	private static List<GitRepository> filterRepositories(GitRepositorySearchResult gitSearchResult) {
-		List<GitRepository> repositories = gitSearchResult.getRepositories();
-		List<GitRepository> javaRepos = new ArrayList<GitRepository>();
-		for (GitRepository gitRepository1 : repositories) {
-			javaRepos.add(gitRepository1);
-		}
 		return javaRepos;
 	}
 
@@ -294,13 +282,9 @@ public class GitHubAnalyser {
 		return false;
 	}
 
+	@SuppressWarnings("unused")
 	private static boolean isCheckoutOk(CheckoutCommand checkout) {
 		return checkout.getResult().getStatus().equals(Status.OK);
-	}
-
-	private static List<GitRepository> getJavaRepositories(GitRepositorySearchResult gitSearchResult) {
-		List<GitRepository> javaRepos = filterRepositories(gitSearchResult);
-		return javaRepos;
 	}
 
 	public static void registerNewCommit() {
