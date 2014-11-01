@@ -1,0 +1,15 @@
+<persistence xmlns="http://java.sun.com/xml/ns/persistence" version="1.0">
+    <persistence-unit name="gitfactorUnit" transaction-type="RESOURCE_LOCAL">
+    	<provider>org.hibernate.ejb.HibernatePersistence</provider>
+        <mapping-file>META-INF/gitfactor-query.xml</mapping-file>
+        <properties>
+			<property name="hibernate.dialect" value="org.hibernate.dialect.MySQLDialect"/>
+			<property name="hibernate.connection.autocommit" value="false"/>
+			<property name="hibernate.show_sql" value="false"/>
+            <property name="hibernate.format_sql" value="false"/>
+            <property name="hibernate.hbm2ddl.auto" value="none"/>
+            <property name="hibernate.use_sql_comments" value="true"/>
+            <property name="hibernate.query.substitutions" value="true 1, false 0"/>
+	  	</properties>
+    </persistence-unit>
+</persistence>

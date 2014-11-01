@@ -2,6 +2,7 @@ package br.com.guilhermebarbosa.gitfactor;
 
 import gr.uom.java.xmi.ASTReader;
 import gr.uom.java.xmi.UMLModel;
+import gr.uom.java.xmi.UMLOperation;
 import gr.uom.java.xmi.diff.Refactoring;
 import gr.uom.java.xmi.diff.UMLModelDiff;
 
@@ -11,6 +12,7 @@ import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -25,24 +27,35 @@ import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
+import br.com.guilhermebarbosa.git.dao.GitHubDAO;
+import br.com.guilhermebarbosa.git.model.Commit;
+import br.com.guilhermebarbosa.git.model.Operation;
+import br.com.guilhermebarbosa.git.model.Repository;
+import br.com.guilhermebarbosa.git.model.RepositoryStatus;
+import br.com.guilhermebarbosa.git.model.StatusCommit;
 
 import com.google.common.collect.Iterables;
 
+@Service
 public class GitHubAnalyser {
 	private static final Logger LOGGER = Logger.getLogger(GitHubAnalyser.class);
 
 	private static AtomicInteger countCommits;
-
-	public static void analyseGitHubByQueryUrl(String queryUrl, int totalThreads, String tmpFolder, boolean analyse) throws Exception {
-		// search for repositories
-		List<GitRepository> javaRepos = searchRepositories(queryUrl);
+	
+	@Autowired private GitHubDAO gitHubDAO;
+	
+	public void analyseGitHubByQueryUrl(String queryUrl, String tmpFolder, boolean analyse) throws Exception {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
+		// search for repositories
+		List<GitRepository> javaRepos = searchRepositories(queryUrl);
 		// create dirs
 		new File(tmpFolder).mkdirs();
 		// git repo
@@ -51,7 +64,7 @@ public class GitHubAnalyser {
 		// total of repositories
 		LOGGER.info(String.format("Total repositories: %1$d", javaRepos.size()));
 		for (GitRepository gitRepository : javaRepos) {
-			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: " + gitRepository.getStars());
+ 			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: " + gitRepository.getStars());
 			// folder for checkout
 			File gitRepoPath = new File(tmpFolder + File.separator + gitRepository.getName());
 			// clone repo to folder
@@ -61,6 +74,9 @@ public class GitHubAnalyser {
 			Iterable<RevCommit> call = git.log().call();
 			int commits = Iterables.size(git.log().call());
 			totalCommits += commits;
+			// save the repository
+			Repository repository = saveRepository(commits, gitRepository);
+			Map<String, Commit> mapCommits = getMapCommits(repository);
 			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
 			if ( analyse ) {
 				// inicializa o count commits
@@ -69,10 +85,23 @@ public class GitHubAnalyser {
 				for (RevCommit revCommit : call) {
 					// se possui apenas um pai, faz a comparacao
 					if (revCommit.getParentCount() == 1) {
-						// analisa o commit
-						GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
-						// increment count commits
-						GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
+						try {
+							// get from map for better performance
+							Commit commit = mapCommits.get(revCommit.getName());
+							// if has not been analysed
+							if ( commit == null ) {
+								// analisa o commit
+								List<Refactoring> refactorings = GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
+								// increment count commits
+								GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
+								// save commit
+								commit = saveCommit(repository, revCommit);
+								// save refactorings
+								saveRefactorings(commit, refactorings);
+							}
+						} catch (Exception e) {
+							LOGGER.error(e.getMessage(), e);
+						}
 					}
 					// give a hint to garbage collection
 					System.gc();
@@ -85,6 +114,61 @@ public class GitHubAnalyser {
 			}
 		}
 		LOGGER.info(String.format("Total Commits: %1$d.", totalCommits));
+	}
+
+	private void saveRefactorings(Commit commit, List<Refactoring> refactorings) {
+		// save the refactorings found, if any
+		if ( refactorings != null && !refactorings.isEmpty() ) {
+			for (Refactoring r : refactorings) {
+				br.com.guilhermebarbosa.git.model.Refactoring refactoring = new br.com.guilhermebarbosa.git.model.Refactoring();
+				refactoring.setCommit(commit);
+				refactoring.setName(r.getName());
+				gitHubDAO.saveRefactoring(refactoring);
+				// save operations
+				List<UMLOperation> operations = getOperations(r);
+				for (UMLOperation umlOperation : operations) {
+					Operation operation = new Operation();
+					operation.setClassName(umlOperation.getClassName());
+					operation.setRefactoring(refactoring);
+					operation.setVisibility(umlOperation.getVisibility());
+					operation.setName(umlOperation.getName());
+					gitHubDAO.saveOperation(operation);
+				}
+			}
+		}
+	}
+
+	private Commit saveCommit(Repository repository, RevCommit revCommit) {
+		Commit commit;
+		// save the commit
+		commit = new Commit();
+		commit.setDate(new Date(revCommit.getCommitTime()));
+		commit.setHash(revCommit.getName());
+		commit.setMessage(revCommit.getFullMessage());
+		commit.setRepository(repository);
+		commit.setStatus(StatusCommit.ANALYSED);
+		commit.setAuthorName(revCommit.getAuthorIdent().getName());
+		gitHubDAO.saveCommit(commit);
+		return commit;
+	}
+
+	private List<UMLOperation> getOperations(Refactoring refactoring) {
+		return new ArrayList<UMLOperation>();
+	}
+
+	private Repository saveRepository(int totalCommits, GitRepository gitRepository) {
+		Repository repository = gitHubDAO.findByName(gitRepository.getName());
+		if ( repository == null ) {
+			repository = new Repository();
+			repository.setName(gitRepository.getName());
+			repository.setAuthor(gitRepository.getOwner().getLogin());
+			repository.setStatus(RepositoryStatus.CREATED);
+			repository.setTotalCommits(totalCommits);
+			repository.setUrl(gitRepository.getCloneUrl());
+			repository.setTotalStars(Integer.parseInt(gitRepository.getStars()));
+			gitHubDAO.saveRepository(repository);
+		}
+		return repository;
 	}
 
 	private static List<GitRepository> searchRepositories(String queryUrl) throws RestClientException, UnsupportedEncodingException {
@@ -118,7 +202,7 @@ public class GitHubAnalyser {
 		return searchResult;
 	}
 
-	public static void analyseCommit(File gitRepoPath, Git git, RevCommit revCommit) throws Exception {
+	public static List<Refactoring> analyseCommit(File gitRepoPath, Git git, RevCommit revCommit) throws Exception {
 		long init = System.currentTimeMillis();
 		LOGGER.info("Building model structure.");
 		GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
@@ -127,14 +211,15 @@ public class GitHubAnalyser {
 		init = System.currentTimeMillis();
 		LOGGER.info("Comparing models to get refactorings.");
 		// para cada entrada do filho, verifica se existe uma entrada para o pai e compara
-		analyseModelRefactorings(modelStructure);
+		List<Refactoring> refactorings = analyseModelRefactorings(modelStructure);
 		end = System.currentTimeMillis();
 		LOGGER.info(String.format("Tempo total analyseModelRefactorings(): %1$s [s].", ((end - init) / 1000.0)));
 		// log
 		LOGGER.info(String.format("%1$d commits analysed.", countCommits.get()));
+		return refactorings;
 	}
 
-	private static void analyseModelRefactorings(GitModelStructure modelStructure) {
+	private static List<Refactoring> analyseModelRefactorings(GitModelStructure modelStructure) {
 		for (String src : modelStructure.getMapChildrenModel().keySet()) {
 			if (modelStructure.getMapFatherModel().containsKey(src)) {
 				try {
@@ -146,6 +231,7 @@ public class GitHubAnalyser {
 						for (Refactoring refactoring : diff.getRefactorings()) {
 							LOGGER.info(refactoring.toString());
 						}
+						return diff.getRefactorings();
 					}
 				} catch (Throwable t) {
 					LOGGER.error(t.getMessage(), t);
@@ -153,6 +239,7 @@ public class GitHubAnalyser {
 				}
 			}
 		}
+		return null;
 	}
 
 	private static GitModelStructure buildModelStructure(File gitRepoPath, Git git, RevCommit revCommit) throws Exception {
@@ -171,7 +258,11 @@ public class GitHubAnalyser {
 
 	private static Ref checkout(Git git, RevCommit revCommit) throws Exception {
 		// apaga a branch
-		deleteBranch(git, revCommit);
+		try {
+			deleteBranch(git, revCommit);
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+		}
 		// cria a branch
 		Ref ref = git
 				.checkout()
@@ -293,5 +384,14 @@ public class GitHubAnalyser {
 
 	public static AtomicInteger getCountCommits() {
 		return countCommits;
+	}
+	
+	public Map<String, Commit> getMapCommits(Repository repository) {
+		Map<String, Commit> map = new HashMap<String, Commit>();
+		List<Commit> commits = gitHubDAO.findByRepository(repository);
+		for (Commit commit : commits) {
+			map.put(commit.getHash(), commit);
+		}
+		return map;
 	}
 }
