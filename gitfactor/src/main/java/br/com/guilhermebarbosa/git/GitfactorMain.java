@@ -15,7 +15,7 @@ public class GitfactorMain {
 			classPathXmlApplicationContext.start();
 			// get service
 			GitHubAnalyser gitHubAnalyser = (GitHubAnalyser) br.com.guilhermebarbosa.git.ApplicationContext.getInstance().getBean("gitHubAnalyser"); 
-			gitHubAnalyser.analyseGitHubByQueryUrl(Constants.GIT_HUB_QUERY_REPOS_TINY, tmpFolder, analyse);
+			gitHubAnalyser.analyseGitHubByQueryUrl(Constants.GIT_HUB_QUERY_REPOS, tmpFolder, analyse);
 			classPathXmlApplicationContext.close();
 		} catch (Exception e) {
 			e.printStackTrace();
