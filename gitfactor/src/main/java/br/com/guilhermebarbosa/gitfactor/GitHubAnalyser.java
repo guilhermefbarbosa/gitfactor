@@ -101,11 +101,11 @@ public class GitHubAnalyser {
 		countCommits = new AtomicInteger(0);
 		// analisa cada commit
 		for (RevCommit revCommit : call) {
+			// get from map for better performance
+			Commit commit = mapCommits.get(revCommit.getName());
 			// se possui apenas um pai, faz a comparacao
 			if (revCommit.getParentCount() == 1) {
 				try {
-					// get from map for better performance
-					Commit commit = mapCommits.get(revCommit.getName());
 					// if has not been analysed
 					if ( commit == null ) {
 						// analisa o commit
@@ -113,15 +113,22 @@ public class GitHubAnalyser {
 						// increment count commits
 						GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
 						// save commit
-						commit = saveCommit(repository, revCommit);
+						commit = saveCommit(repository, revCommit, StatusCommit.ANALYSED);
 						// save refactorings
 						saveRefactorings(commit, refactorings);
+						LOGGER.info(String.format("[%2$s] Commit %1$s analysed.", revCommit.getName(), repository.getName()));
 					} else {
-						LOGGER.info("Commit %1$s found.");
+						LOGGER.info(String.format("[%2$s] Commit %1$s already analysed.", revCommit.getName(), repository.getName()));
 					}
 				} catch (Exception e) {
+					// save commit
+					commit = saveCommit(repository, revCommit, StatusCommit.ERROR);
+					LOGGER.error(String.format("[%2$s] Commit %1$s produced error on analysis.", revCommit.getName(), repository.getName()));
 					LOGGER.error(e.getMessage(), e);
 				}
+			} else {
+				LOGGER.info(String.format("[%2$s] Commit %1$s was ignored because has many parents.", revCommit.getName(), repository.getName()));
+				commit = saveCommit(repository, revCommit, StatusCommit.IGNORED);
 			}
 			// give a hint to garbage collection
 			System.gc();
@@ -171,7 +178,7 @@ public class GitHubAnalyser {
 		}
 	}
 
-	private Commit saveCommit(Repository repository, RevCommit revCommit) {
+	private Commit saveCommit(Repository repository, RevCommit revCommit, StatusCommit status) {
 		Commit commit;
 		// save the commit
 		commit = new Commit();
@@ -179,7 +186,7 @@ public class GitHubAnalyser {
 		commit.setHash(revCommit.getName());
 		commit.setMessage(revCommit.getFullMessage());
 		commit.setRepository(repository);
-		commit.setStatus(StatusCommit.ANALYSED);
+		commit.setStatus(status);
 		commit.setAuthorName(revCommit.getAuthorIdent().getName());
 		gitHubDAO.saveCommit(commit);
 		return commit;
