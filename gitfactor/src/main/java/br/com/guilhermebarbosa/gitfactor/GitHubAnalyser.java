@@ -25,6 +25,8 @@ import org.eclipse.jgit.api.CheckoutCommand;
 import org.eclipse.jgit.api.CheckoutResult.Status;
 import org.eclipse.jgit.api.CreateBranchCommand.SetupUpstreamMode;
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,11 +60,78 @@ public class GitHubAnalyser {
 		List<GitRepository> javaRepos = searchRepositories(queryUrl);
 		// create dirs
 		new File(tmpFolder).mkdirs();
-		// git repo
-		Git git = null;
-		int totalCommits = 0;
+		Integer totalCommits = 0;
 		// total of repositories
 		LOGGER.info(String.format("Total repositories: %1$d", javaRepos.size()));
+		// save repositories found and checkout
+		saveRepositoriesFound(tmpFolder, javaRepos, totalCommits);
+		// for each repository, try to make an analysis
+		for (GitRepository gitRepository : javaRepos) {
+			// folder for checkout
+			File gitRepoPath = new File(tmpFolder + File.separator + gitRepository.getName());
+			// clone repo to folder
+			// git repo
+			Git git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
+			int commits = Iterables.size(git.log().call());
+			// save the repository
+			Repository repository = saveRepository(commits, gitRepository);
+			// if repository is too big, do not analyse
+			if ( repository.getTotalCommits() > 10000 ) {
+				LOGGER.info(String.format("Repository %1$s is too big. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
+				continue;
+			}
+			Iterable<RevCommit> call = git.log().call();
+ 			Map<String, Commit> mapCommits = getMapCommits(repository);
+			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
+			if ( analyse ) {
+				analyseRepository(git, gitRepoPath, repository, call, mapCommits);
+			}
+			// excluir o repositorio
+			boolean delete = gitRepoPath.delete();
+			if ( delete ) {
+				LOGGER.info(String.format("Repository deleted sucessfull: %1$s.", gitRepoPath.getAbsolutePath()));
+			}
+		}
+	}
+
+	private void analyseRepository(Git git, File gitRepoPath,
+			Repository repository, Iterable<RevCommit> call,
+			Map<String, Commit> mapCommits) {
+		// inicializa o count commits
+		countCommits = new AtomicInteger(0);
+		// analisa cada commit
+		for (RevCommit revCommit : call) {
+			// se possui apenas um pai, faz a comparacao
+			if (revCommit.getParentCount() == 1) {
+				try {
+					// get from map for better performance
+					Commit commit = mapCommits.get(revCommit.getName());
+					// if has not been analysed
+					if ( commit == null ) {
+						// analisa o commit
+						List<Refactoring> refactorings = GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
+						// increment count commits
+						GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
+						// save commit
+						commit = saveCommit(repository, revCommit);
+						// save refactorings
+						saveRefactorings(commit, refactorings);
+					} else {
+						LOGGER.info("Commit %1$s found.");
+					}
+				} catch (Exception e) {
+					LOGGER.error(e.getMessage(), e);
+				}
+			}
+			// give a hint to garbage collection
+			System.gc();
+		}
+	}
+
+	private void saveRepositoriesFound(String tmpFolder,
+			List<GitRepository> javaRepos, Integer totalCommits)
+			throws Exception, GitAPIException, NoHeadException {
+		Git git;
 		for (GitRepository gitRepository : javaRepos) {
  			LOGGER.info("Repository: " + gitRepository.getName() + " - stars: " + gitRepository.getStars());
 			// folder for checkout
@@ -71,54 +140,11 @@ public class GitHubAnalyser {
 			git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
-			Iterable<RevCommit> call = git.log().call();
 			int commits = Iterables.size(git.log().call());
+			// sum total commits
 			totalCommits += commits;
 			// save the repository
-			Repository repository = saveRepository(commits, gitRepository);
-			// if repository is too big, do not analyse
-			if ( repository.getTotalCommits() > 10000 ) {
-				LOGGER.info(String.format("Repository %1$s is too big. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
-				continue;
-			}
- 			Map<String, Commit> mapCommits = getMapCommits(repository);
-			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
-			if ( analyse ) {
-				// inicializa o count commits
-				countCommits = new AtomicInteger(0);
-				// analisa cada commit
-				for (RevCommit revCommit : call) {
-					// se possui apenas um pai, faz a comparacao
-					if (revCommit.getParentCount() == 1) {
-						try {
-							// get from map for better performance
-							Commit commit = mapCommits.get(revCommit.getName());
-							// if has not been analysed
-							if ( commit == null ) {
-								// analisa o commit
-								List<Refactoring> refactorings = GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
-								// increment count commits
-								GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
-								// save commit
-								commit = saveCommit(repository, revCommit);
-								// save refactorings
-								saveRefactorings(commit, refactorings);
-							} else {
-								LOGGER.info("Commit %1$s found.");
-							}
-						} catch (Exception e) {
-							LOGGER.error(e.getMessage(), e);
-						}
-					}
-					// give a hint to garbage collection
-					System.gc();
-				}
-			}
-			// excluir o repositorio
-			boolean delete = gitRepoPath.delete();
-			if ( delete ) {
-				LOGGER.info(String.format("Repository deleted sucessfull: %1$s.", gitRepoPath.getAbsolutePath()));
-			}
+			saveRepository(commits, gitRepository);
 		}
 		LOGGER.info(String.format("Total Commits: %1$d.", totalCommits));
 	}
