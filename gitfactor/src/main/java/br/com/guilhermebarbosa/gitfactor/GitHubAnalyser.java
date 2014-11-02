@@ -76,7 +76,12 @@ public class GitHubAnalyser {
 			totalCommits += commits;
 			// save the repository
 			Repository repository = saveRepository(commits, gitRepository);
-			Map<String, Commit> mapCommits = getMapCommits(repository);
+			// if repository is too big, do not analyse
+			if ( repository.getTotalCommits() > 10000 ) {
+				LOGGER.info(String.format("Repository %1$s is too big. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
+				continue;
+			}
+ 			Map<String, Commit> mapCommits = getMapCommits(repository);
 			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
 			if ( analyse ) {
 				// inicializa o count commits
@@ -98,6 +103,8 @@ public class GitHubAnalyser {
 								commit = saveCommit(repository, revCommit);
 								// save refactorings
 								saveRefactorings(commit, refactorings);
+							} else {
+								LOGGER.info("Commit %1$s found.");
 							}
 						} catch (Exception e) {
 							LOGGER.error(e.getMessage(), e);
