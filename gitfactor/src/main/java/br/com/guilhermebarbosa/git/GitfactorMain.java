@@ -12,6 +12,8 @@ public class GitfactorMain {
 			Boolean analyse = Boolean.valueOf(args[1]);
 			// initialize spring
 			ClassPathXmlApplicationContext classPathXmlApplicationContext = new ClassPathXmlApplicationContext("classpath:applicationContext.xml");
+			// shutdownhook to stop context gracefully
+			classPathXmlApplicationContext.registerShutdownHook();
 			classPathXmlApplicationContext.start();
 			// get service
 			GitHubAnalyser gitHubAnalyser = (GitHubAnalyser) br.com.guilhermebarbosa.git.ApplicationContext.getInstance().getBean("gitHubAnalyser"); 

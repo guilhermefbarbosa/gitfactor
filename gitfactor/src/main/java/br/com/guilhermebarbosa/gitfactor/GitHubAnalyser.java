@@ -12,7 +12,9 @@ import gr.uom.java.xmi.diff.ExtractSuperclassRefactoring;
 import gr.uom.java.xmi.diff.InlineOperationRefactoring;
 import gr.uom.java.xmi.diff.IntroducePolymorphismRefactoring;
 import gr.uom.java.xmi.diff.MergeOperation;
+import gr.uom.java.xmi.diff.MoveAttributeRefactoring;
 import gr.uom.java.xmi.diff.MoveClassRefactoring;
+import gr.uom.java.xmi.diff.MoveOperationRefactoring;
 import gr.uom.java.xmi.diff.PullUpAttributeRefactoring;
 import gr.uom.java.xmi.diff.PullUpOperationRefactoring;
 import gr.uom.java.xmi.diff.PushDownAttributeRefactoring;
@@ -201,14 +203,10 @@ public class GitHubAnalyser {
 	}
 
 	private String getAttributeName(Refactoring refactoring) {
-		if ( refactoring instanceof PullUpAttributeRefactoring ) {
+		if ( refactoring instanceof MoveAttributeRefactoring || 
+				refactoring instanceof PullUpAttributeRefactoring || 
+				refactoring instanceof PushDownAttributeRefactoring ) {
 			// movedAttribute UMLAttribute
-			// sourceClassName String
-			// targetClassName String
-			UMLAttribute attribute = getAttribute(refactoring, "movedAttribute");
-			return attribute != null ? attribute.getName() : null;
-		} else if ( refactoring instanceof PushDownAttributeRefactoring ) {
-			// movedAttribute UMLAtrribute
 			// sourceClassName String
 			// targetClassName String
 			UMLAttribute attribute = getAttribute(refactoring, "movedAttribute");
@@ -269,6 +267,9 @@ public class GitHubAnalyser {
 					operations.add(operation2);
 				}
 			}
+		} else if ( refactoring instanceof MoveOperationRefactoring ) {
+			addUmlOperation("originalOperation", refactoring, operations);
+			addUmlOperation("movedOperation", refactoring, operations);
 		} else if ( refactoring instanceof PullUpOperationRefactoring ) {
 			addUmlOperation("originalOperation", refactoring, operations);
 			addUmlOperation("movedOperation", refactoring, operations);
@@ -284,7 +285,10 @@ public class GitHubAnalyser {
 
 	private String getSourceClassName(Refactoring refactoring) {
 		String fieldName = null;
-		if ( refactoring instanceof PullUpAttributeRefactoring ) {
+		if ( refactoring instanceof MoveOperationRefactoring || 
+				refactoring instanceof MoveAttributeRefactoring ) {
+			fieldName = "sourceClassName";
+		} else if ( refactoring instanceof PullUpAttributeRefactoring ) {
 			// movedAttribute UMLAttribute
 			fieldName = "sourceClassName";
 			// sourceClassName String
@@ -321,7 +325,10 @@ public class GitHubAnalyser {
 	
 	private String getTargetClassName(Refactoring refactoring) {
 		String fieldName = null;
-		if ( refactoring instanceof PullUpAttributeRefactoring ) {
+		if ( refactoring instanceof MoveOperationRefactoring || 
+				refactoring instanceof MoveAttributeRefactoring ) {
+			fieldName = "targetClassName";
+		} else if ( refactoring instanceof PullUpAttributeRefactoring ) {
 			// movedAttribute UMLAttribute
 			fieldName = "targetClassName";
 			// sourceClassName String
