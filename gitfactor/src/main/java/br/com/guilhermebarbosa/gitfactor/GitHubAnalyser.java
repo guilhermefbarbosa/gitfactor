@@ -183,6 +183,7 @@ public class GitHubAnalyser {
 				refactoring.setSourceClassName(getSourceClassName(r));
 				refactoring.setTargetClassName(getTargetClassName(r));
 				refactoring.setAttributeName(getAttributeName(r));
+				refactoring.setDescription(r.toString());
 				gitHubDAO.saveRefactoring(refactoring);
 				// save operations
 				List<UMLOperation> operations = getOperations(r);

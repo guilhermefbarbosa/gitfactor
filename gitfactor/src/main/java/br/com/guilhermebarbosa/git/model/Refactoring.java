@@ -19,6 +19,7 @@ public class Refactoring {
 	private String sourceClassName;
 	private String targetClassName;
 	private String attributeName;
+	private String description;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -75,5 +76,14 @@ public class Refactoring {
 
 	public void setAttributeName(String attributeName) {
 		this.attributeName = attributeName;
+	}
+
+	@Column(name = "description")
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
 	}
 }
