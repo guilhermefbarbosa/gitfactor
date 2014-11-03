@@ -18,6 +18,7 @@ public class Operation {
 	private Refactoring refactoring;
 	private String className;
 	private String visibility;
+	private String description;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -65,5 +66,14 @@ public class Operation {
 
 	public void setVisibility(String visibility) {
 		this.visibility = visibility;
+	}
+
+	@Column(name = "description")
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
 	}
 }

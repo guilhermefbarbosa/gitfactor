@@ -1,9 +1,25 @@
 package br.com.guilhermebarbosa.gitfactor;
 
 import gr.uom.java.xmi.ASTReader;
+import gr.uom.java.xmi.UMLAttribute;
 import gr.uom.java.xmi.UMLModel;
 import gr.uom.java.xmi.UMLOperation;
+import gr.uom.java.xmi.decomposition.UMLOperationBodyMapper;
+import gr.uom.java.xmi.diff.ConvertAnonymousClassToTypeRefactoring;
+import gr.uom.java.xmi.diff.ExtractAndMoveOperationRefactoring;
+import gr.uom.java.xmi.diff.ExtractOperationRefactoring;
+import gr.uom.java.xmi.diff.ExtractSuperclassRefactoring;
+import gr.uom.java.xmi.diff.InlineOperationRefactoring;
+import gr.uom.java.xmi.diff.IntroducePolymorphismRefactoring;
+import gr.uom.java.xmi.diff.MergeOperation;
+import gr.uom.java.xmi.diff.MoveClassRefactoring;
+import gr.uom.java.xmi.diff.PullUpAttributeRefactoring;
+import gr.uom.java.xmi.diff.PullUpOperationRefactoring;
+import gr.uom.java.xmi.diff.PushDownAttributeRefactoring;
+import gr.uom.java.xmi.diff.PushDownOperationRefactoring;
 import gr.uom.java.xmi.diff.Refactoring;
+import gr.uom.java.xmi.diff.RenameClassRefactoring;
+import gr.uom.java.xmi.diff.RenameOperationRefactoring;
 import gr.uom.java.xmi.diff.UMLModelDiff;
 
 import java.io.BufferedReader;
@@ -11,6 +27,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -163,6 +180,9 @@ public class GitHubAnalyser {
 				br.com.guilhermebarbosa.git.model.Refactoring refactoring = new br.com.guilhermebarbosa.git.model.Refactoring();
 				refactoring.setCommit(commit);
 				refactoring.setName(r.getName());
+				refactoring.setSourceClassName(getSourceClassName(r));
+				refactoring.setTargetClassName(getTargetClassName(r));
+				refactoring.setAttributeName(getAttributeName(r));
 				gitHubDAO.saveRefactoring(refactoring);
 				// save operations
 				List<UMLOperation> operations = getOperations(r);
@@ -172,10 +192,28 @@ public class GitHubAnalyser {
 					operation.setRefactoring(refactoring);
 					operation.setVisibility(umlOperation.getVisibility());
 					operation.setName(umlOperation.getName());
+					operation.setDescription(umlOperation.toString());
 					gitHubDAO.saveOperation(operation);
 				}
 			}
 		}
+	}
+
+	private String getAttributeName(Refactoring refactoring) {
+		if ( refactoring instanceof PullUpAttributeRefactoring ) {
+			// movedAttribute UMLAttribute
+			// sourceClassName String
+			// targetClassName String
+			UMLAttribute attribute = getAttribute(refactoring, "movedAttribute");
+			return attribute != null ? attribute.getName() : null;
+		} else if ( refactoring instanceof PushDownAttributeRefactoring ) {
+			// movedAttribute UMLAtrribute
+			// sourceClassName String
+			// targetClassName String
+			UMLAttribute attribute = getAttribute(refactoring, "movedAttribute");
+			return attribute != null ? attribute.getName() : null;
+		}
+		return null;
 	}
 
 	private Commit saveCommit(Repository repository, RevCommit revCommit, StatusCommit status) {
@@ -184,7 +222,7 @@ public class GitHubAnalyser {
 		commit = new Commit();
 		commit.setDate(new Date(new Long(revCommit.getCommitTime()*1000L)));
 		commit.setHash(revCommit.getName());
-		commit.setMessage(revCommit.getFullMessage());
+		commit.setMessage(getMessageTruncated(revCommit.getFullMessage()));
 		commit.setRepository(repository);
 		commit.setStatus(status);
 		commit.setAuthorName(revCommit.getAuthorIdent().getName());
@@ -192,8 +230,164 @@ public class GitHubAnalyser {
 		return commit;
 	}
 
+	private String getMessageTruncated(String fullMessage) {
+		if ( fullMessage != null ) {
+			if ( fullMessage.length() > 1000 ) {
+				return fullMessage.substring(0, 1000);
+			} else { 
+				return fullMessage;
+			}
+		}
+		return null;
+	}
+
 	private List<UMLOperation> getOperations(Refactoring refactoring) {
-		return new ArrayList<UMLOperation>();
+		List<UMLOperation> operations = new ArrayList<UMLOperation>();
+		if ( refactoring instanceof ConvertAnonymousClassToTypeRefactoring ) {
+			addUmlOperation("anonymousClass", refactoring, operations);
+			addUmlOperation("addedClass", refactoring, operations);
+		} else if ( refactoring instanceof ExtractAndMoveOperationRefactoring ) {
+			addUmlOperation("extractedFromOperation", refactoring, operations);
+			addUmlOperation("extractedOperation", refactoring, operations);
+		} else if ( refactoring instanceof ExtractOperationRefactoring ) {
+			addUmlOperation("extractedOperation", refactoring, operations);
+		} else if ( refactoring instanceof ExtractSuperclassRefactoring ) {
+			addUmlOperation("extractedClass", refactoring, operations);
+		} else if ( refactoring instanceof InlineOperationRefactoring ) {
+			addUmlOperation("inlinedOperation", refactoring, operations);
+			addUmlOperation("inlinedToOperation", refactoring, operations);
+		} else if ( refactoring instanceof MergeOperation ) {
+			UMLOperationBodyMapper umlOperationBodyMapper = getOperationBodyMapper(refactoring);
+			if ( umlOperationBodyMapper != null ) {
+				UMLOperation operation1 = umlOperationBodyMapper.getOperation1();
+				if ( operation1 != null ) {
+					operations.add(operation1);
+				}
+				UMLOperation operation2 = umlOperationBodyMapper.getOperation2();
+				if ( operation2 != null ) {
+					operations.add(operation2);
+				}
+			}
+		} else if ( refactoring instanceof PullUpOperationRefactoring ) {
+			addUmlOperation("originalOperation", refactoring, operations);
+			addUmlOperation("movedOperation", refactoring, operations);
+		} else if ( refactoring instanceof PushDownOperationRefactoring ) {
+			addUmlOperation("originalOperation", refactoring, operations);
+			addUmlOperation("movedOperation", refactoring, operations);
+		} else if ( refactoring instanceof RenameOperationRefactoring ) {
+			addUmlOperation("originalOperation", refactoring, operations);
+			addUmlOperation("renamedOperation", refactoring, operations);
+		}
+		return operations;
+	}
+
+	private String getSourceClassName(Refactoring refactoring) {
+		String fieldName = null;
+		if ( refactoring instanceof PullUpAttributeRefactoring ) {
+			// movedAttribute UMLAttribute
+			fieldName = "sourceClassName";
+			// sourceClassName String
+			// targetClassName String
+		} else if ( refactoring instanceof PushDownAttributeRefactoring ) {
+			// movedAttribute UMLAtrribute
+			fieldName = "sourceClassName";
+			// sourceClassName String
+			// targetClassName String
+		} else if ( refactoring instanceof MoveClassRefactoring ) {
+			fieldName = "originalClassName";
+			// originalClassName String
+			// movedClassName String
+		} else if ( refactoring instanceof RenameClassRefactoring ) {
+			fieldName = "originalClassName";
+			// originalClassName
+			// renamedClassName
+		} else if ( refactoring instanceof IntroducePolymorphismRefactoring ) {
+			// clientClass
+			// supplierClass
+			fieldName = "clientClass";
+		} else {
+			return null;
+		}
+		try {
+			Field f = refactoring.getClass().getDeclaredField(fieldName);
+			f.setAccessible(true);
+			return (String) f.get(refactoring);
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+			return null;
+		}
+	}
+	
+	private String getTargetClassName(Refactoring refactoring) {
+		String fieldName = null;
+		if ( refactoring instanceof PullUpAttributeRefactoring ) {
+			// movedAttribute UMLAttribute
+			fieldName = "targetClassName";
+			// sourceClassName String
+			// targetClassName String
+		} else if ( refactoring instanceof PushDownAttributeRefactoring ) {
+			// movedAttribute UMLAtrribute
+			fieldName = "targetClassName";
+			// sourceClassName String
+			// targetClassName String
+		} else if ( refactoring instanceof MoveClassRefactoring ) {
+			fieldName = "movedClassName";
+			// originalClassName String
+			// movedClassName String
+		} else if ( refactoring instanceof RenameClassRefactoring ) {
+			fieldName = "renamedClassName";
+			// originalClassName
+			// renamedClassName
+		} else if ( refactoring instanceof IntroducePolymorphismRefactoring ) {
+			// clientClass
+			// supplierClass
+			fieldName = "supplierClass";
+		} else {
+			return null;
+		}
+		try {
+			Field f = refactoring.getClass().getDeclaredField(fieldName);
+			f.setAccessible(true);
+			return (String) f.get(refactoring);
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+			return null;
+		}
+	}
+	
+	private UMLOperationBodyMapper getOperationBodyMapper(Refactoring refactoring) {
+		try {
+			Field f = refactoring.getClass().getDeclaredField("mapper");
+			f.setAccessible(true);
+			return (UMLOperationBodyMapper) f.get(refactoring);
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+			return null;
+		} 
+	}
+	
+	private UMLAttribute getAttribute(Refactoring refactoring, String fieldName) {
+		try {
+			Field f = refactoring.getClass().getDeclaredField(fieldName);
+			f.setAccessible(true);
+			return (UMLAttribute) f.get(refactoring);
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+			return null;
+		} 
+	}
+	
+	private void addUmlOperation(String fieldName, Refactoring refactoring, List<UMLOperation> operations) {
+		try {
+			Field f = refactoring.getClass().getDeclaredField(fieldName); //NoSuchFieldException
+			f.setAccessible(true);
+			UMLOperation umlOperation = (UMLOperation) f.get(refactoring);
+			if ( umlOperation != null ) {
+				operations.add(umlOperation);
+			}
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+		}
 	}
 
 	private Repository saveRepository(int totalCommits, GitRepository gitRepository) {

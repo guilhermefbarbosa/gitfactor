@@ -16,6 +16,9 @@ public class Refactoring {
 	private Integer idRefactoring;
 	private String name;
 	private Commit commit;
+	private String sourceClassName;
+	private String targetClassName;
+	private String attributeName;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,5 +48,32 @@ public class Refactoring {
 
 	public void setCommit(Commit commit) {
 		this.commit = commit;
+	}
+
+	@Column(name = "source_class_name")
+	public String getSourceClassName() {
+		return sourceClassName;
+	}
+
+	public void setSourceClassName(String sourceClassName) {
+		this.sourceClassName = sourceClassName;
+	}
+
+	@Column(name = "target_class_name")
+	public String getTargetClassName() {
+		return targetClassName;
+	}
+
+	public void setTargetClassName(String targetClassName) {
+		this.targetClassName = targetClassName;
+	}
+
+	@Column(name = "attribute_name")
+	public String getAttributeName() {
+		return attributeName;
+	}
+
+	public void setAttributeName(String attributeName) {
+		this.attributeName = attributeName;
 	}
 }
