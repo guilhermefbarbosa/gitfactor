@@ -14,6 +14,7 @@
         http://www.springframework.org/schema/aop
         http://www.springframework.org/schema/aop/spring-aop.xsd">
     <context:component-scan base-package="br.com.guilhermebarbosa" />
+    <context:property-placeholder location="classpath:env.properties" />
     
     <context:annotation-config />
 
@@ -46,6 +47,6 @@
 		<property name="driverClassName" value="com.mysql.jdbc.Driver" />
 		<property name="url" value="jdbc:mysql://localhost:3306/gitfactor" />
 		<property name="username" value="root" />
-		<property name="password" value="123456" />
+		<property name="password" value="${mysql.password}" />
 	</bean>
 </beans>

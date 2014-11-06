@@ -108,6 +108,22 @@
 		<start-class>hello.Application</start-class>
 	</properties>
 
+	<profiles>
+		<profile>
+			<id>barbosa</id>
+			<properties>
+				<mysql.password>123456</mysql.password>
+				<env>barbosa</env>
+			</properties>
+		</profile>
+		<profile>
+			<id>juvenal</id>
+			<properties>
+				<mysql.password>juvenal1345</mysql.password>
+				<env>juvenal</env>
+			</properties>
+		</profile>
+	</profiles>
 	<build>
 		<resources>
 			<resource>
@@ -115,6 +131,7 @@
 				<filtering>true</filtering>
 				<includes>
 					<include>**/*.xml</include>
+					<include>env.properties</include>
 				</includes>
 			</resource>
 		</resources>
