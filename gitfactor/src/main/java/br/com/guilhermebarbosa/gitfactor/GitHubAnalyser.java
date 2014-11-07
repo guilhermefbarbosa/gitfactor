@@ -141,6 +141,13 @@ public class GitHubAnalyser {
 						saveRefactorings(commit, refactorings);
 						LOGGER.info(String.format("[%2$s] Commit %1$s analysed.", revCommit.getName(), repository.getName()));
 					} else {
+						Ref tagByCommit = getTagByCommit(git, listTags, revCommit);
+						if ( tagByCommit != null ) {
+							Tag tag = new Tag(tagByCommit.getName());
+							gitHubDAO.saveTag(tag);
+							commit.setTag(tag);
+							gitHubDAO.mergeCommit(commit);
+						}
 						LOGGER.info(String.format("[%2$s] Commit %1$s already analysed.", revCommit.getName(), repository.getName()));
 					}
 				} catch (Exception e) {
@@ -266,7 +273,8 @@ public class GitHubAnalyser {
 
 	private Ref getTagByCommit(Git git, List<Ref> listTag, RevCommit revCommit) {
     	for (Ref tag : listTag) {
-            if (tag.getObjectId().equals(revCommit.getId())) {;
+            if (tag.getObjectId().equals(revCommit.getId())) {
+            	LOGGER.info(String.format("Found tag %1$s for commit %2$s.", tag.getName(), revCommit.getName()));
             	return tag;
             }
         }
