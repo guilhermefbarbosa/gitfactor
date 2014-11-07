@@ -111,6 +111,9 @@
 	<profiles>
 		<profile>
 			<id>tiny</id>
+			<build>
+				<finalName>gitfactor-tiny</finalName>
+			</build>
 			<properties>
 				<mysql.password>123456</mysql.password>
 				<env>tiny</env>
@@ -118,6 +121,9 @@
 		</profile>
 		<profile>
 			<id>barbosa</id>
+			<build>
+				<finalName>gitfactor-barbosa</finalName>
+			</build>
 			<properties>
 				<mysql.password>123456</mysql.password>
 				<env>barbosa</env>
@@ -125,6 +131,9 @@
 		</profile>
 		<profile>
 			<id>juvenal</id>
+			<build>
+				<finalName>gitfactor-juvenal</finalName>
+			</build>
 			<properties>
 				<mysql.password>juvenal1345</mysql.password>
 				<env>juvenal</env>
@@ -132,6 +141,9 @@
 		</profile>
 		<profile>
 			<id>biocev</id>
+			<build>
+				<finalName>gitfactor-biocev</finalName>
+			</build>
 			<properties>
 				<mysql.password>biocev121104</mysql.password>
 				<env>biocev</env>
