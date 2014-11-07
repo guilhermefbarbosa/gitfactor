@@ -13,6 +13,10 @@ public class Tag {
 	private Integer idTag;
 	private String name;
 
+	public Tag() {
+		super();
+	}
+
 	public Tag(String name) {
 		this.name = name;
 	}
