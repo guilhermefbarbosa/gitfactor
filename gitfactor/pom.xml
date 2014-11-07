@@ -123,6 +123,13 @@
 				<env>juvenal</env>
 			</properties>
 		</profile>
+		<profile>
+			<id>biocev</id>
+			<properties>
+				<mysql.password>biocev121104</mysql.password>
+				<env>biocev</env>
+			</properties>
+		</profile>
 	</profiles>
 	<build>
 		<resources>

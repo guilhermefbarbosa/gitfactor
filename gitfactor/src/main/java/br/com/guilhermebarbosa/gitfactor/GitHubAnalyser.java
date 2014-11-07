@@ -54,6 +54,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import br.com.guilhermebarbosa.git.GitConfig;
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
 import br.com.guilhermebarbosa.git.dao.GitHubDAO;
 import br.com.guilhermebarbosa.git.model.Commit;
@@ -72,11 +73,11 @@ public class GitHubAnalyser {
 	
 	@Autowired private GitHubDAO gitHubDAO;
 	
-	public void analyseGitHubByQueryUrl(String queryUrl, String tmpFolder, boolean analyse) throws Exception {
+	public void analyseGitHubByQueryUrl(GitConfig gitConfig, String tmpFolder, boolean analyse) throws Exception {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
 		// search for repositories
-		List<GitRepository> javaRepos = searchRepositories(queryUrl);
+		List<GitRepository> javaRepos = searchRepositories(gitConfig.getUrl());
 		// create dirs
 		new File(tmpFolder).mkdirs();
 		Integer totalCommits = 0;
@@ -92,13 +93,20 @@ public class GitHubAnalyser {
 			// git repo
 			Git git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			int commits = Iterables.size(git.log().call());
+			// if repository is too big, do not analyse
+			if ( gitConfig.equals(GitConfig.BARBOSA) || gitConfig.equals(GitConfig.JUVENAL) ) {
+				if ( commits > 10000 ) {
+					LOGGER.info(String.format("Repository %1$s is too big. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
+					continue;
+				}
+			} else if ( gitConfig.equals(GitConfig.BIOCEV) ) {
+				if ( commits <= 10000 ) {
+					LOGGER.info(String.format("Repository %1$s is ignored. Only analyse big repos. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
+					continue;
+				}
+			}
 			// save the repository
 			Repository repository = saveRepository(commits, gitRepository);
-			// if repository is too big, do not analyse
-			if ( repository.getTotalCommits() > 10000 ) {
-				LOGGER.info(String.format("Repository %1$s is too big. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
-				continue;
-			}
 			Iterable<RevCommit> call = git.log().call();
  			Map<String, Commit> mapCommits = getMapCommits(repository);
 			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
