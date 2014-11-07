@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 import br.com.guilhermebarbosa.git.model.Commit;
 import br.com.guilhermebarbosa.git.model.Operation;
 import br.com.guilhermebarbosa.git.model.Refactoring;
+import br.com.guilhermebarbosa.git.model.Tag;
 
 @Repository
 public class GitHubDAO {
@@ -80,5 +81,15 @@ public class GitHubDAO {
 		Query query = em.createNamedQuery("Commit.findByRepository");
 		query.setParameter("idRepository", repository.getIdRepository());
 		return query.getResultList();
+	}
+	
+	@SuppressWarnings("unchecked")
+	public Tag findTagByName(String name) {
+		Query query = em.createNamedQuery("Tag.findByName");
+		query.setParameter("name", name);
+		List<Tag> resultList = query.getResultList();
+		if ( resultList != null && !resultList.isEmpty() ) {
+			return resultList.get(0);
+		} else return null;
 	}
 }

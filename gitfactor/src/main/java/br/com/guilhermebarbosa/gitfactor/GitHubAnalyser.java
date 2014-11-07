@@ -96,8 +96,8 @@ public class GitHubAnalyser {
 			int commits = Iterables.size(git.log().call());
 			// ignore repositories that are not acceptable
 			if ( !isRepositoryAcceptable(gitRepository, commits, gitConfig) ) {
-				LOGGER.info(String.format("Repository %1$s is not acceptable by config %2$s. Commits: %3$d "
-						+ ". Total of Commits: %2$d.", gitRepository.getName(), gitConfig.name(), commits));
+				LOGGER.info(String.format("Repository %1$s is not acceptable by config %2$s. Commits: %3$d ", 
+						gitRepository.getName(), gitConfig.name(), commits));
 				continue;
 			}
 			// save the repository
@@ -144,7 +144,7 @@ public class GitHubAnalyser {
 						updateCommitTagInformation(git, listTags, revCommit, commit);
 						// atualiza o parent
 						// save the parent commit
-						updateParentCommitInformation(repository, revCommit, commit);
+						updateParentCommitInformation(repository, revCommit, commit, mapCommits);
 						LOGGER.info(String.format("[%2$s] Commit %1$s already analysed.", revCommit.getName(), repository.getName()));
 					}
 				} catch (Exception e) {
@@ -163,18 +163,21 @@ public class GitHubAnalyser {
 	}
 
 	private void updateParentCommitInformation(Repository repository,
-			RevCommit revCommit, Commit commit) {
+			RevCommit revCommit, Commit commit, Map<String, Commit> mapCommits) {
 		if ( commit.getParent() == null ) {
 			LOGGER.info(String.format("Updating parent information for commit %1$s.", revCommit.getName()));
 			RevCommit parentRevCommit = revCommit.getParent(0);
-			Commit parent = new Commit();
-			parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
-			parent.setHash(parentRevCommit.getName());
-			parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
-			parent.setRepository(repository);
-			parent.setStatus(StatusCommit.ANALYSED);
-			parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
-			gitHubDAO.saveCommit(parent);
+			Commit parent = mapCommits.get(parentRevCommit.getName());
+			if ( parent == null ) {
+				parent = new Commit();
+				parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
+				parent.setHash(parentRevCommit.getName());
+				parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
+				parent.setRepository(repository);
+				parent.setStatus(StatusCommit.ANALYSED);
+				parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
+				gitHubDAO.saveCommit(parent);
+			}
 			commit.setParent(parent);
 			gitHubDAO.mergeCommit(commit);
 		}
@@ -184,8 +187,11 @@ public class GitHubAnalyser {
 			RevCommit revCommit, Commit commit) {
 		Ref tagByCommit = getTagByCommit(git, listTags, revCommit);
 		if ( tagByCommit != null ) {
-			Tag tag = new Tag(tagByCommit.getName());
-			gitHubDAO.saveTag(tag);
+			Tag tag = gitHubDAO.findTagByName(tagByCommit.getName());
+			if ( tag == null ) {
+				tag = new Tag(tagByCommit.getName());
+				gitHubDAO.saveTag(tag);
+			}
 			commit.setTag(tag);
 			gitHubDAO.mergeCommit(commit);
 		}

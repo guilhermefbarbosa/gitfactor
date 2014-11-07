@@ -27,4 +27,11 @@
 			where repository.idRepository = :idRepository
 		</query>
 	</named-query>
+	<named-query name="Tag.findByName">
+		<query>
+			select tag
+			from Tag tag
+			where tag.name = :name
+		</query>
+	</named-query>
 </entity-mappings>
