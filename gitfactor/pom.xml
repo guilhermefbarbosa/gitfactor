@@ -110,6 +110,13 @@
 
 	<profiles>
 		<profile>
+			<id>tiny</id>
+			<properties>
+				<mysql.password>123456</mysql.password>
+				<env>tiny</env>
+			</properties>
+		</profile>
+		<profile>
 			<id>barbosa</id>
 			<properties>
 				<mysql.password>123456</mysql.password>

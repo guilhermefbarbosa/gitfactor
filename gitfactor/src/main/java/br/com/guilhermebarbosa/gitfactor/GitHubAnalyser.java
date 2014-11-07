@@ -62,6 +62,7 @@ import br.com.guilhermebarbosa.git.model.Operation;
 import br.com.guilhermebarbosa.git.model.Repository;
 import br.com.guilhermebarbosa.git.model.RepositoryStatus;
 import br.com.guilhermebarbosa.git.model.StatusCommit;
+import br.com.guilhermebarbosa.git.model.Tag;
 
 import com.google.common.collect.Iterables;
 
@@ -84,7 +85,7 @@ public class GitHubAnalyser {
 		// total of repositories
 		LOGGER.info(String.format("Total repositories: %1$d", javaRepos.size()));
 		// save repositories found and checkout
-		saveRepositoriesFound(tmpFolder, javaRepos, totalCommits);
+		saveRepositoriesFound(tmpFolder, javaRepos, totalCommits, gitConfig);
 		// for each repository, try to make an analysis
 		for (GitRepository gitRepository : javaRepos) {
 			// folder for checkout
@@ -93,17 +94,11 @@ public class GitHubAnalyser {
 			// git repo
 			Git git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			int commits = Iterables.size(git.log().call());
-			// if repository is too big, do not analyse
-			if ( gitConfig.equals(GitConfig.BARBOSA) || gitConfig.equals(GitConfig.JUVENAL) ) {
-				if ( commits > 10000 ) {
-					LOGGER.info(String.format("Repository %1$s is too big. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
-					continue;
-				}
-			} else if ( gitConfig.equals(GitConfig.BIOCEV) ) {
-				if ( commits <= 10000 ) {
-					LOGGER.info(String.format("Repository %1$s is ignored. Only analyse big repos. - Total of Commits: %2$d. Ignoring analysis.", gitRepository.getName(), commits));
-					continue;
-				}
+			// ignore repositories that are not acceptable
+			if ( !isRepositoryAcceptable(gitRepository, commits, gitConfig) ) {
+				LOGGER.info(String.format("Repository %1$s is not acceptable by config %2$s. Commits: %3$d "
+						+ ". Total of Commits: %2$d.", gitRepository.getName(), gitConfig.name(), commits));
+				continue;
 			}
 			// save the repository
 			Repository repository = saveRepository(commits, gitRepository);
@@ -123,7 +118,8 @@ public class GitHubAnalyser {
 
 	private void analyseRepository(Git git, File gitRepoPath,
 			Repository repository, Iterable<RevCommit> call,
-			Map<String, Commit> mapCommits) {
+			Map<String, Commit> mapCommits) throws GitAPIException {
+		List<Ref> listTags = git.tagList().call();
 		// inicializa o count commits
 		countCommits = new AtomicInteger(0);
 		// analisa cada commit
@@ -140,7 +136,7 @@ public class GitHubAnalyser {
 						// increment count commits
 						GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
 						// save commit
-						commit = saveCommit(repository, revCommit, StatusCommit.ANALYSED);
+						commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.ANALYSED);
 						// save refactorings
 						saveRefactorings(commit, refactorings);
 						LOGGER.info(String.format("[%2$s] Commit %1$s analysed.", revCommit.getName(), repository.getName()));
@@ -149,13 +145,13 @@ public class GitHubAnalyser {
 					}
 				} catch (Exception e) {
 					// save commit
-					commit = saveCommit(repository, revCommit, StatusCommit.ERROR);
+					commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.ERROR);
 					LOGGER.error(String.format("[%2$s] Commit %1$s produced error on analysis.", revCommit.getName(), repository.getName()));
 					LOGGER.error(e.getMessage(), e);
 				}
 			} else {
 				LOGGER.info(String.format("[%2$s] Commit %1$s was ignored because has many parents.", revCommit.getName(), repository.getName()));
-				commit = saveCommit(repository, revCommit, StatusCommit.IGNORED);
+				commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.IGNORED);
 			}
 			// give a hint to garbage collection
 			System.gc();
@@ -163,7 +159,7 @@ public class GitHubAnalyser {
 	}
 
 	private void saveRepositoriesFound(String tmpFolder,
-			List<GitRepository> javaRepos, Integer totalCommits)
+			List<GitRepository> javaRepos, Integer totalCommits, GitConfig gitConfig)
 			throws Exception, GitAPIException, NoHeadException {
 		Git git;
 		for (GitRepository gitRepository : javaRepos) {
@@ -175,12 +171,24 @@ public class GitHubAnalyser {
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			int commits = Iterables.size(git.log().call());
-			// sum total commits
-			totalCommits += commits;
-			// save the repository
-			saveRepository(commits, gitRepository);
+			if ( isRepositoryAcceptable(gitRepository, commits, gitConfig) ) {
+				// sum total commits
+				totalCommits += commits;
+				// save the repository
+				saveRepository(commits, gitRepository);
+			}
 		}
 		LOGGER.info(String.format("Total Commits: %1$d.", totalCommits));
+	}
+
+	private boolean isRepositoryAcceptable(GitRepository gitRepository, int commits, GitConfig gitConfig) {
+		switch (gitConfig) {
+			case BARBOSA: return commits <= 10000;
+			case BIOCEV: return commits > 10000;
+			case JUVENAL: return commits <= 10000;
+			case TINY: return true;
+		}
+		return false;
 	}
 
 	private void saveRefactorings(Commit commit, List<Refactoring> refactorings) {
@@ -223,7 +231,7 @@ public class GitHubAnalyser {
 		return null;
 	}
 
-	private Commit saveCommit(Repository repository, RevCommit revCommit, StatusCommit status) {
+	private Commit saveCommit(Git git, List<Ref> listTag, Repository repository, RevCommit revCommit, StatusCommit status) {
 		Commit commit;
 		// save the commit
 		commit = new Commit();
@@ -233,8 +241,36 @@ public class GitHubAnalyser {
 		commit.setRepository(repository);
 		commit.setStatus(status);
 		commit.setAuthorName(revCommit.getAuthorIdent().getName());
+		Ref refTag = getTagByCommit(git, listTag, revCommit);
+		if ( refTag != null ) {
+			Tag tag = new Tag(refTag.getName());
+			commit.setTag(tag);
+			gitHubDAO.saveTag(tag);
+		}
+		// save the parent commit
+		if ( revCommit.getParentCount() == 1 ) {
+			RevCommit parentRevCommit = revCommit.getParent(0);
+			Commit parent = new Commit();
+			parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
+			parent.setHash(parentRevCommit.getName());
+			parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
+			parent.setRepository(repository);
+			parent.setStatus(status);
+			parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
+			gitHubDAO.saveCommit(parent);
+			commit.setParent(parent);
+		}
 		gitHubDAO.saveCommit(commit);
 		return commit;
+	}
+
+	private Ref getTagByCommit(Git git, List<Ref> listTag, RevCommit revCommit) {
+    	for (Ref tag : listTag) {
+            if (tag.getObjectId().equals(revCommit.getId())) {;
+            	return tag;
+            }
+        }
+    	return null;
 	}
 
 	private String getMessageTruncated(String fullMessage) {

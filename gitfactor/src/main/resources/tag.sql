@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS `tag` (
+  `id_tag` INT NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(45) NULL,
+  PRIMARY KEY (`id_tag`))
+ENGINE = InnoDB;
+
+ALTER TABLE commit ADD COLUMN id_tag INT NULL;
+
+ALTER TABLE commit ADD CONSTRAINT `fk_commit_tag`
+    FOREIGN KEY (`id_tag`)
+    REFERENCES tag (`id_tag`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION;

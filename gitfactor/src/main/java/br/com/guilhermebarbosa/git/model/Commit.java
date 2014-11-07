@@ -26,6 +26,7 @@ public class Commit {
 	private String authorName;
 	private Repository repository;
 	private StatusCommit status;
+	private Tag tag;
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -102,5 +103,15 @@ public class Commit {
 
 	public void setAuthorName(String authorName) {
 		this.authorName = authorName;
+	}
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "id_tag")
+	public Tag getTag() {
+		return tag;
+	}
+
+	public void setTag(Tag tag) {
+		this.tag = tag;
 	}
 }

@@ -25,6 +25,11 @@ public class GitHubDAO {
 	}
 	
 	@Transactional(value = TxType.REQUIRED)
+	public void saveTag(br.com.guilhermebarbosa.git.model.Tag tag) {
+		em.persist(tag);
+	}
+	
+	@Transactional(value = TxType.REQUIRED)
 	public void mergeRepository(br.com.guilhermebarbosa.git.model.Repository repository) {
 		em.merge(repository);
 	}
