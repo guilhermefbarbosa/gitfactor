@@ -229,6 +229,8 @@ public class GitHubAnalyser {
 			File gitRepoPath = new File(tmpFolder + File.separator + gitRepository.getName());
 			// clone repo to folder
 			git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
+			// checkout master to calculate log size correctly
+			checkoutMaster(git);
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			int commits = Iterables.size(git.log().call());
