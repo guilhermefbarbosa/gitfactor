@@ -668,11 +668,25 @@ public class GitHubAnalyser {
 		}
 	}
 
+	private static boolean isMasterAvailable(Git git) throws GitAPIException {
+		List<Ref> listTags = git.tagList().call();
+		for (Ref ref : listTags) {
+			if ( ref.getName().equals("master") ) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	private static void checkoutMaster(Git git) throws GitAPIException,
 			RefAlreadyExistsException, RefNotFoundException,
 			InvalidRefNameException, CheckoutConflictException {
-		git.checkout().setName("master").call();
-		LOGGER.info("Checkout master branch.");
+		if ( isMasterAvailable(git) ) {
+			git.checkout().setName("master").call();
+			LOGGER.info("Checkout master branch.");
+		} else {
+			LOGGER.info("Master branch is not available.");
+		}
 	}
 
 	private static Map<String, UMLModel> obterMapModel(File gitRepoPath) {
