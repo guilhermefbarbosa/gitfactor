@@ -11,3 +11,9 @@ ALTER TABLE commit ADD CONSTRAINT `fk_commit_tag`
     REFERENCES tag (`id_tag`)
     ON DELETE NO ACTION
     ON UPDATE NO ACTION;
+    
+ALTER TABLE `commit` 
+CHANGE COLUMN `status` `status` VARCHAR(20) NULL DEFAULT NULL;
+
+ALTER TABLE `repository` 
+CHANGE COLUMN `status` `status` VARCHAR(20) NULL DEFAULT NULL ;

@@ -113,7 +113,9 @@ public class GitHubAnalyser {
  			Map<String, Commit> mapCommits = getMapCommits(repository);
 			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
 			if ( analyse ) {
-				analyseRepository(git, gitRepoPath, repository, call, mapCommits);
+				if ( repository.getStatus() != null && repository.getStatus().equals(RepositoryStatus.PENDING) ) {
+					analyseRepository(git, gitRepoPath, repository, call, mapCommits);
+				}
 			}
 			// excluir o repositorio
 			boolean delete = gitRepoPath.delete();
@@ -129,38 +131,44 @@ public class GitHubAnalyser {
 		List<Ref> listTags = git.tagList().call();
 		// inicializa o count commits
 		countCommits = new AtomicInteger(0);
+		// start analysis
+		repository.setStart(new Date());
+		gitHubDAO.mergeRepository(repository);
 		// analisa cada commit
 		for (RevCommit revCommit : call) {
 			// get from map for better performance
-			Commit commit = mapCommits.get(revCommit.getName());
+			Commit commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.PENDING, mapCommits);
+			// update tag in commit
+			updateCommitTagInformation(git, listTags, revCommit, commit);
+			// atualiza o parent and save the parent commit
+			updateParentCommitInformation(repository, revCommit, commit, mapCommits);
 			// se possui apenas um pai, faz a comparacao
 			if (revCommit.getParentCount() == 1) {
 				try {
-					// if has not been analysed
-					if ( commit == null ) {
-						// analisa o commit
+					if ( commit != null && commit.getStatus().equals(StatusCommit.PENDING) ) {
+						// analyse commit and get refactorings
 						List<Refactoring> refactorings = GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
-						// save commit
-						commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.ANALYSED);
 						// save refactorings
 						saveRefactorings(commit, refactorings);
+						// mark as analysed
+						commit.setStatus(StatusCommit.ANALYSED);
+						gitHubDAO.mergeCommit(commit);
+						// log
 						LOGGER.info(String.format("[%2$s] Commit %1$s analysed.", revCommit.getName(), repository.getName()));
 					} else {
-						updateCommitTagInformation(git, listTags, revCommit, commit);
-						// atualiza o parent
-						// save the parent commit
-						updateParentCommitInformation(repository, revCommit, commit, mapCommits);
+						// log
 						LOGGER.info(String.format("[%2$s] Commit %1$s already analysed.", revCommit.getName(), repository.getName()));
 					}
 				} catch (Exception e) {
-					// save commit
-					commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.ERROR);
+					commit.setStatus(StatusCommit.ERROR);
+					gitHubDAO.mergeCommit(commit);
 					LOGGER.error(String.format("[%2$s] Commit %1$s produced error on analysis.", revCommit.getName(), repository.getName()));
 					LOGGER.error(e.getMessage(), e);
 				}
 			} else {
+				commit.setStatus(StatusCommit.IGNORED);
+				gitHubDAO.mergeCommit(commit);
 				LOGGER.info(String.format("[%2$s] Commit %1$s was ignored because has many parents.", revCommit.getName(), repository.getName()));
-				commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.IGNORED);
 			}
 			// increment count commits
 			GitHubAnalyser.getCountCommits().set(GitHubAnalyser.getCountCommits().get() + 1);
@@ -169,11 +177,15 @@ public class GitHubAnalyser {
 			// give a hint to garbage collection
 			System.gc();
 		}
+		// end analysis
+		repository.setEnd(new Date());
+		repository.setStatus(RepositoryStatus.ANALYSED);
+		gitHubDAO.mergeRepository(repository);
 	}
 
 	private void updateParentCommitInformation(Repository repository,
 			RevCommit revCommit, Commit commit, Map<String, Commit> mapCommits) {
-		if ( commit.getParent() == null ) {
+		if ( commit.getParent() == null && revCommit.getParentCount() == 1 ) {
 			LOGGER.info(String.format("Updating parent information for commit %1$s.", revCommit.getName()));
 			RevCommit parentRevCommit = revCommit.getParent(0);
 			Commit parent = mapCommits.get(parentRevCommit.getName());
@@ -279,37 +291,69 @@ public class GitHubAnalyser {
 		return null;
 	}
 
-	private Commit saveCommit(Git git, List<Ref> listTag, Repository repository, RevCommit revCommit, StatusCommit status) {
-		Commit commit;
-		// save the commit
-		commit = new Commit();
-		commit.setDate(new Date(new Long(revCommit.getCommitTime()*1000L)));
-		commit.setHash(revCommit.getName());
-		commit.setMessage(getMessageTruncated(revCommit.getFullMessage()));
-		commit.setRepository(repository);
-		commit.setStatus(status);
-		commit.setAuthorName(revCommit.getAuthorIdent().getName());
+	/**
+	 * Save the commit and it`s parents.
+	 * 
+	 * @param git
+	 * @param listTag
+	 * @param repository
+	 * @param revCommit
+	 * @param status
+	 * @param mapCommits
+	 * @return
+	 */
+	private Commit saveCommit(Git git, List<Ref> listTag, Repository repository, 
+			RevCommit revCommit, StatusCommit status, 
+			Map<String, Commit> mapCommits) {
+		// save parent first
+		Commit parent = null;
+		for(RevCommit parentRevCommit : revCommit.getParents()) {
+			// if parent exists, use the one already persisted
+			if ( mapCommits.get(parentRevCommit.getName()) != null ) {
+				parent = mapCommits.get(parentRevCommit.getName());
+			} else {
+				parent = new Commit();
+				parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
+				parent.setHash(parentRevCommit.getName());
+				parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
+				parent.setRepository(repository);
+				parent.setStatus(status);
+				parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
+				gitHubDAO.saveCommit(parent);
+			}
+			// to avoid duplication and faster access
+			mapCommits.put(parent.getHash(), parent);
+		}
+				
+		Commit commit = null;
+		// if doesnt exist, save with parent association
+		if ( mapCommits.get(revCommit.getName()) != null ) {
+			commit = mapCommits.get(revCommit.getName());
+		} else {
+			commit = new Commit();
+			commit.setDate(new Date(new Long(revCommit.getCommitTime()*1000L)));
+			commit.setHash(revCommit.getName());
+			commit.setMessage(getMessageTruncated(revCommit.getFullMessage()));
+			commit.setRepository(repository);
+			commit.setStatus(status);
+			commit.setAuthorName(revCommit.getAuthorIdent().getName());
+			commit.setParent(parent);
+			commit.setTag(saveTagByCommit(git, listTag, revCommit));
+			gitHubDAO.saveCommit(commit);
+		}
+		// to avoid duplication and faster access
+		mapCommits.put(commit.getHash(), commit);
+		return commit;
+	}
+
+	private Tag saveTagByCommit(Git git, List<Ref> listTag, RevCommit revCommit) {
 		Ref refTag = getTagByCommit(git, listTag, revCommit);
 		if ( refTag != null ) {
 			Tag tag = new Tag(refTag.getName());
-			commit.setTag(tag);
 			gitHubDAO.saveTag(tag);
+			return tag;
 		}
-		// save the parent commit
-		if ( revCommit.getParentCount() == 1 ) {
-			RevCommit parentRevCommit = revCommit.getParent(0);
-			Commit parent = new Commit();
-			parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
-			parent.setHash(parentRevCommit.getName());
-			parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
-			parent.setRepository(repository);
-			parent.setStatus(status);
-			parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
-			gitHubDAO.saveCommit(parent);
-			commit.setParent(parent);
-		}
-		gitHubDAO.saveCommit(commit);
-		return commit;
+		return null;
 	}
 
 	private Ref getTagByCommit(Git git, List<Ref> listTag, RevCommit revCommit) {
@@ -497,11 +541,15 @@ public class GitHubAnalyser {
 			repository = new Repository();
 			repository.setName(gitRepository.getName());
 			repository.setAuthor(gitRepository.getOwner().getLogin());
-			repository.setStatus(RepositoryStatus.CREATED);
-			repository.setTotalCommits(totalCommits);
+			repository.setStatus(RepositoryStatus.PENDING);
 			repository.setUrl(gitRepository.getCloneUrl());
+			repository.setTotalCommits(totalCommits);
 			repository.setTotalStars(Integer.parseInt(gitRepository.getStars()));
 			gitHubDAO.saveRepository(repository);
+		} else {
+			repository.setTotalCommits(totalCommits);
+			repository.setTotalStars(Integer.parseInt(gitRepository.getStars()));
+			gitHubDAO.mergeRepository(repository);
 		}
 		return repository;
 	}
