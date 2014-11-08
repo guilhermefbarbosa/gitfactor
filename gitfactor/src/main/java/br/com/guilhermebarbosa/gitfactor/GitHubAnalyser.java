@@ -27,6 +27,7 @@ import gr.uom.java.xmi.diff.UMLModelDiff;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
@@ -660,33 +661,39 @@ public class GitHubAnalyser {
 		for (Ref ref : call) {
 			if (ref.getName().contains(revCommit.getName())) {
 				// checkout master
-				checkoutMaster(git);
-				// apaga os branchs
-				List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
-				LOGGER.info("Deleted branchs: " + deletedBranches);
+				Ref masterBranch = checkoutMaster(git);
+				// se fez checkout do master, apaga os branchs
+				if ( masterBranch != null ) {
+					List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
+					LOGGER.info("Deleted branchs: " + deletedBranches);
+				} else {
+					LOGGER.info("Cannot delete branchs: " + revCommit.getName() + " because master branch is not available.");
+				}
 			}
 		}
 	}
 
-	private static boolean isMasterAvailable(Git git) throws GitAPIException {
-		List<Ref> listTags = git.tagList().call();
-		for (Ref ref : listTags) {
-			if ( ref.getName().equals("master") ) {
-				return true;
-			}
-		}
-		return false;
+	private static Ref getMasterBranch(Git git) throws GitAPIException, IOException {
+		Ref refMaster = git.getRepository().getRef("master");
+		return refMaster;
 	}
 	
-	private static void checkoutMaster(Git git) throws GitAPIException,
+	private static Ref checkoutMaster(Git git) throws GitAPIException,
 			RefAlreadyExistsException, RefNotFoundException,
-			InvalidRefNameException, CheckoutConflictException {
-		if ( isMasterAvailable(git) ) {
-			git.checkout().setName("master").call();
-			LOGGER.info("Checkout master branch.");
+			InvalidRefNameException, CheckoutConflictException, IOException {
+		Ref masterBranch = getMasterBranch(git);
+		if ( masterBranch != null ) {
+			CheckoutCommand checkoutMaster = git.checkout();
+			checkoutMaster.setName(masterBranch.getName()).call();
+			if ( isCheckoutOk(checkoutMaster) ) {
+				LOGGER.info("Checkout master branch OK.");
+			} else {
+				LOGGER.info("Checkout master branch FAILED.");
+			}
 		} else {
 			LOGGER.info("Master branch is not available.");
 		}
+		return masterBranch;
 	}
 
 	private static Map<String, UMLModel> obterMapModel(File gitRepoPath) {
@@ -772,7 +779,6 @@ public class GitHubAnalyser {
 		return false;
 	}
 
-	@SuppressWarnings("unused")
 	private static boolean isCheckoutOk(CheckoutCommand checkout) {
 		return checkout.getResult().getStatus().equals(Status.OK);
 	}
