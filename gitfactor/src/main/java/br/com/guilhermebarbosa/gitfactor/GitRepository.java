@@ -11,6 +11,8 @@ public class GitRepository {
 	private String language;
 	private String stars;
 	private String cloneUrl;
+	private String defaultBranch;
+	private String size;
 	private GitRepositoryOwner owner;
 
 	@JsonCreator
@@ -20,14 +22,17 @@ public class GitRepository {
 			@JsonProperty("language") String language,
 			@JsonProperty("stargazers_count") String stars,
 			@JsonProperty("owner") GitRepositoryOwner owner,
-			@JsonProperty("clone_url") String cloneUrl) {
-		super();
+			@JsonProperty("clone_url") String cloneUrl,
+			@JsonProperty("default_branch") String defaultBranch,
+			@JsonProperty("size") String size) {
 		this.id = id;
 		this.name = name;
 		this.language = language;
 		this.stars = stars;
 		this.owner = owner;
 		this.cloneUrl = cloneUrl;
+		this.defaultBranch = defaultBranch;
+		this.size = size;
 	}
 
 	public String getId() {
@@ -76,5 +81,21 @@ public class GitRepository {
 
 	public void setCloneUrl(String cloneUrl) {
 		this.cloneUrl = cloneUrl;
+	}
+
+	public String getDefaultBranch() {
+		return defaultBranch;
+	}
+
+	public void setDefaultBranch(String defaultBranch) {
+		this.defaultBranch = defaultBranch;
+	}
+
+	public String getSize() {
+		return size;
+	}
+
+	public void setSize(String size) {
+		this.size = size;
 	}
 }

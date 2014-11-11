@@ -29,6 +29,8 @@ public class Repository {
 	private Date start;
 	private Date end;
 	private RepositoryStatus status;
+	private Integer size;
+	private String defaultBranch;
 	private List<Commit> commits;
 
 	@Id
@@ -124,5 +126,23 @@ public class Repository {
 
 	public void setTotalStars(Integer totalStars) {
 		this.totalStars = totalStars;
+	}
+
+	@Column(name = "size")
+	public Integer getSize() {
+		return size;
+	}
+
+	public void setSize(Integer size) {
+		this.size = size;
+	}
+
+	@Column(name = "default_branch")
+	public String getDefaultBranch() {
+		return defaultBranch;
+	}
+
+	public void setDefaultBranch(String defaultBranch) {
+		this.defaultBranch = defaultBranch;
 	}
 }

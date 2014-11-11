@@ -5,7 +5,8 @@ public enum GitConfig {
 	JUVENAL("https://api.github.com/search/repositories?q=language:java stars:225..1000 size:<1000000&sort=stars&order=desc&per_page=100", "juvenal"),
 //	TINY("https://api.github.com/search/repositories?q=language:java stars:>1000 size:<1000&sort=stars&order=desc&per_page=100", "tiny"),
 	// joda-time
-	TINY("https://api.github.com/search/repositories?q=joda-time stars:>900&sort=stars&order=desc&per_page=100", "tiny"),
+//	TINY("https://api.github.com/search/repositories?q=joda-time stars:>900&sort=stars&order=desc&per_page=100", "tiny"),
+	TINY("https://api.github.com/search/repositories?q=cassandra language:java stars:>1000&sort=stars&order=desc&per_page=100", "tiny"),
 	BIOCEV("https://api.github.com/search/repositories?q=language:java stars:>1000 size:<1000000&sort=stars&order=desc&per_page=100", "biocev");
 	
 	private String code;

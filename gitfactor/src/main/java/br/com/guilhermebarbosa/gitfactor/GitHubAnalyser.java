@@ -99,7 +99,7 @@ public class GitHubAnalyser {
 			// git repo
 			Git git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			// checkout do master
-			checkoutMaster(git);
+			Ref masterBranch = checkoutMaster(git, gitRepository);
 			// numero de commits
 			int commits = Iterables.size(git.log().call());
 			// ignore repositories that are not acceptable
@@ -110,12 +110,20 @@ public class GitHubAnalyser {
 			}
 			// save the repository
 			Repository repository = saveRepository(commits, gitRepository);
+			// if master is not available
+			if ( masterBranch == null ) {
+				LOGGER.info(String.format("Repository %1$s is being ignored because it does not have a master branch.", gitRepository.getName()));
+				repository.setStatus(RepositoryStatus.IGNORED);
+				repository.setEnd(new Date());
+				gitHubDAO.mergeRepository(repository);
+				continue;
+			}
 			Iterable<RevCommit> call = git.log().call();
  			Map<String, Commit> mapCommits = getMapCommits(repository);
 			LOGGER.info(String.format("Repository: %1$s - Commits: %2$d.", gitRepository.getName(), commits));
 			if ( analyse ) {
 				if ( repository.getStatus() != null && repository.getStatus().equals(RepositoryStatus.PENDING) ) {
-					analyseRepository(git, gitRepoPath, repository, call, mapCommits);
+					analyseRepository(git, gitRepoPath, repository, call, mapCommits, gitRepository);
 				}
 			}
 			// excluir o repositorio
@@ -128,7 +136,7 @@ public class GitHubAnalyser {
 
 	private void analyseRepository(Git git, File gitRepoPath,
 			Repository repository, Iterable<RevCommit> call,
-			Map<String, Commit> mapCommits) throws GitAPIException {
+			Map<String, Commit> mapCommits, GitRepository gitRepository) throws GitAPIException {
 		List<Ref> listTags = git.tagList().call();
 		// inicializa o count commits
 		countCommits = new AtomicInteger(0);
@@ -148,7 +156,7 @@ public class GitHubAnalyser {
 				try {
 					if ( commit != null && commit.getStatus().equals(StatusCommit.PENDING) ) {
 						// analyse commit and get refactorings
-						List<Refactoring> refactorings = GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit);
+						List<Refactoring> refactorings = GitHubAnalyser.analyseCommit(gitRepoPath, git, revCommit, gitRepository);
 						// save refactorings
 						saveRefactorings(commit, refactorings);
 						// mark as analysed
@@ -230,7 +238,7 @@ public class GitHubAnalyser {
 			// clone repo to folder
 			git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			// checkout master to calculate log size correctly
-			checkoutMaster(git);
+			checkoutMaster(git, gitRepository);
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			int commits = Iterables.size(git.log().call());
@@ -548,10 +556,14 @@ public class GitHubAnalyser {
 			repository.setUrl(gitRepository.getCloneUrl());
 			repository.setTotalCommits(totalCommits);
 			repository.setTotalStars(Integer.parseInt(gitRepository.getStars()));
+			repository.setDefaultBranch(gitRepository.getDefaultBranch());
+			repository.setSize(Integer.parseInt(gitRepository.getSize()));
 			gitHubDAO.saveRepository(repository);
 		} else {
 			repository.setTotalCommits(totalCommits);
 			repository.setTotalStars(Integer.parseInt(gitRepository.getStars()));
+			repository.setDefaultBranch(gitRepository.getDefaultBranch());
+			repository.setSize(Integer.parseInt(gitRepository.getSize()));
 			gitHubDAO.mergeRepository(repository);
 		}
 		return repository;
@@ -588,10 +600,10 @@ public class GitHubAnalyser {
 		return searchResult;
 	}
 
-	public static List<Refactoring> analyseCommit(File gitRepoPath, Git git, RevCommit revCommit) throws Exception {
+	public static List<Refactoring> analyseCommit(File gitRepoPath, Git git, RevCommit revCommit, GitRepository gitRepository) throws Exception {
 		long init = System.currentTimeMillis();
 		LOGGER.info("Building model structure.");
-		GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit);
+		GitModelStructure modelStructure = buildModelStructure(gitRepoPath, git, revCommit, gitRepository);
 		long end = System.currentTimeMillis();
 		LOGGER.info(String.format("Tempo total buildModelStructure(): %1$s [s].", ((end - init) / 1000.0)));
 		init = System.currentTimeMillis();
@@ -626,24 +638,24 @@ public class GitHubAnalyser {
 		return null;
 	}
 
-	private static GitModelStructure buildModelStructure(File gitRepoPath, Git git, RevCommit revCommit) throws Exception {
+	private static GitModelStructure buildModelStructure(File gitRepoPath, Git git, RevCommit revCommit, GitRepository gitRepository) throws Exception {
 		// cria objeto que armazena as comparacoes
 		GitModelStructure modelStructure = new GitModelStructure();
 		// faz checkout do filho
-		checkout(git, revCommit);
+		checkout(git, revCommit, gitRepository);
 		// obtem o map model do filho
 		modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath));
 		// faz o checkout do pai
-		checkout(git, revCommit.getParent(0));
+		checkout(git, revCommit.getParent(0), gitRepository);
 		// obtem o model do pai
 		modelStructure.setMapFatherModel(obterMapModel(gitRepoPath));
 		return modelStructure;
 	}
 
-	private static Ref checkout(Git git, RevCommit revCommit) throws Exception {
+	private static Ref checkout(Git git, RevCommit revCommit, GitRepository gitRepository) throws Exception {
 		// apaga a branch
 		try {
-			deleteBranch(git, revCommit);
+			deleteBranch(git, revCommit, gitRepository);
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);
 		}
@@ -658,12 +670,12 @@ public class GitHubAnalyser {
 		return ref;
 	}
 
-	private static void deleteBranch(Git git, RevCommit revCommit) throws Exception {
+	private static void deleteBranch(Git git, RevCommit revCommit, GitRepository gitRepository) throws Exception {
 		List<Ref> call = git.branchList().call();
 		for (Ref ref : call) {
 			if (ref.getName().contains(revCommit.getName())) {
 				// checkout master
-				Ref masterBranch = checkoutMaster(git);
+				Ref masterBranch = checkoutMaster(git, gitRepository);
 				// se fez checkout do master, apaga os branchs
 				if ( masterBranch != null ) {
 					List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
@@ -675,15 +687,15 @@ public class GitHubAnalyser {
 		}
 	}
 
-	private static Ref getMasterBranch(Git git) throws GitAPIException, IOException {
-		Ref refMaster = git.getRepository().getRef("master");
+	private static Ref getMasterBranch(Git git, GitRepository gitRepository) throws GitAPIException, IOException {
+		Ref refMaster = git.getRepository().getRef(gitRepository.getDefaultBranch());
 		return refMaster;
 	}
 	
-	private static Ref checkoutMaster(Git git) throws GitAPIException,
+	private static Ref checkoutMaster(Git git, GitRepository gitRepository) throws GitAPIException,
 			RefAlreadyExistsException, RefNotFoundException,
 			InvalidRefNameException, CheckoutConflictException, IOException {
-		Ref masterBranch = getMasterBranch(git);
+		Ref masterBranch = getMasterBranch(git, gitRepository);
 		if ( masterBranch != null ) {
 			CheckoutCommand checkoutMaster = git.checkout();
 			checkoutMaster.setName(masterBranch.getName()).call();
