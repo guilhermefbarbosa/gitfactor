@@ -753,7 +753,7 @@ public class GitHubAnalyser {
 				}
 				packageStr = packageStr.replaceAll("\\.", File.separator);
 				// System.out.println(packageStr);
-				String pathForSrcFolder = path.getAbsolutePath().replaceAll(packageStr, "");
+				String pathForSrcFolder = path.getAbsolutePath().replaceAll(File.separator + packageStr, "");
 				// System.out.println(pathForSrcFolder);
 				return pathForSrcFolder;
 			}
