@@ -206,11 +206,20 @@ public class GitHubAnalyser {
 				parent.setMessage(getMessageTruncated(parentRevCommit));
 				parent.setRepository(repository);
 				parent.setStatus(StatusCommit.ANALYSED);
-				parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
+				parent.setAuthorName(getAuthorName(parentRevCommit));
 				gitHubDAO.saveCommit(parent);
 			}
 			commit.setParent(parent);
 			gitHubDAO.mergeCommit(commit);
+		}
+	}
+
+	private String getAuthorName(RevCommit parentRevCommit) {
+		try {
+			return parentRevCommit.getAuthorIdent().getName();
+		} catch(Exception e) {
+			LOGGER.error(e.getMessage(), e);
+			return null;
 		}
 	}
 
@@ -330,7 +339,7 @@ public class GitHubAnalyser {
 				parent.setMessage(getMessageTruncated(parentRevCommit));
 				parent.setRepository(repository);
 				parent.setStatus(status);
-				parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
+				parent.setAuthorName(getAuthorName(parentRevCommit));
 				gitHubDAO.saveCommit(parent);
 			}
 			// to avoid duplication and faster access
@@ -348,7 +357,7 @@ public class GitHubAnalyser {
 			commit.setMessage(getMessageTruncated(revCommit));
 			commit.setRepository(repository);
 			commit.setStatus(status);
-			commit.setAuthorName(revCommit.getAuthorIdent().getName());
+			commit.setAuthorName(getAuthorName(revCommit));
 			commit.setParent(parent);
 			commit.setTag(saveTagByCommit(git, listTag, revCommit));
 			gitHubDAO.saveCommit(commit);
