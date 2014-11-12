@@ -203,7 +203,7 @@ public class GitHubAnalyser {
 				parent = new Commit();
 				parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
 				parent.setHash(parentRevCommit.getName());
-				parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
+				parent.setMessage(getMessageTruncated(parentRevCommit));
 				parent.setRepository(repository);
 				parent.setStatus(StatusCommit.ANALYSED);
 				parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
@@ -327,7 +327,7 @@ public class GitHubAnalyser {
 				parent = new Commit();
 				parent.setDate(new Date(new Long(parentRevCommit.getCommitTime()*1000L)));
 				parent.setHash(parentRevCommit.getName());
-				parent.setMessage(getMessageTruncated(parentRevCommit.getFullMessage()));
+				parent.setMessage(getMessageTruncated(parentRevCommit));
 				parent.setRepository(repository);
 				parent.setStatus(status);
 				parent.setAuthorName(parentRevCommit.getAuthorIdent().getName());
@@ -345,7 +345,7 @@ public class GitHubAnalyser {
 			commit = new Commit();
 			commit.setDate(new Date(new Long(revCommit.getCommitTime()*1000L)));
 			commit.setHash(revCommit.getName());
-			commit.setMessage(getMessageTruncated(revCommit.getFullMessage()));
+			commit.setMessage(getMessageTruncated(revCommit));
 			commit.setRepository(repository);
 			commit.setStatus(status);
 			commit.setAuthorName(revCommit.getAuthorIdent().getName());
@@ -378,7 +378,13 @@ public class GitHubAnalyser {
     	return null;
 	}
 
-	private String getMessageTruncated(String fullMessage) {
+	private String getMessageTruncated(RevCommit parentRevCommit) {
+		String fullMessage = null;
+		try {
+			fullMessage = parentRevCommit.getFullMessage();
+		} catch (Exception e) {
+			LOGGER.error(e.getMessage(), e);
+		}
 		if ( fullMessage != null ) {
 			if ( fullMessage.length() > 1000 ) {
 				return fullMessage.substring(0, 1000);
