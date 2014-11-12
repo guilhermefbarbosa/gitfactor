@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 import org.apache.log4j.Logger;
 import org.eclipse.jgit.api.CheckoutCommand;
@@ -747,7 +748,7 @@ public class GitHubAnalyser {
 		for (File file : listFiles) {
 			if (file.getAbsolutePath().endsWith(".java")) {
 				String packageStr = obterPackageJavaFile(file);
-				if (StringUtils.isEmpty(packageStr)) {
+				if (packageStr == null || StringUtils.isEmpty(packageStr) || !isPackageValid(packageStr)) {
 					continue;
 				}
 				packageStr = packageStr.replaceAll("\\.", File.separator);
@@ -771,7 +772,9 @@ public class GitHubAnalyser {
 			while ((line = bf.readLine()) != null) {
 				if (line.startsWith("package ")) {
 					packageStr = line.substring(line.indexOf("package ") + "package ".length(), line.indexOf(";")).trim();
-					break;
+					if ( isPackageValid(packageStr) ) {
+						break;
+					}
 				}
 			}
 			fileInputStream.close();
@@ -812,5 +815,10 @@ public class GitHubAnalyser {
 			map.put(commit.getHash(), commit);
 		}
 		return map;
+	}
+	
+	public static boolean isPackageValid(String packageStr) {
+		Pattern p = Pattern.compile("^[a-zA-Z_\\$][\\w\\$]*(?:\\.[a-zA-Z_\\$][\\w\\$]*)*$");
+		return p.matcher(packageStr).matches();
 	}
 }
