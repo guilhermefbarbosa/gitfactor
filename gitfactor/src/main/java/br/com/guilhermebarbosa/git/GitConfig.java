@@ -1,8 +1,9 @@
 package br.com.guilhermebarbosa.git;
 
 public enum GitConfig {
-	BARBOSA("https://api.github.com/search/repositories?q=language:java stars:>1000 size:<1000000&sort=stars&order=desc&per_page=100", "barbosa"),
-	JUVENAL("https://api.github.com/search/repositories?q=language:java stars:225..1000 size:<1000000&sort=stars&order=desc&per_page=100", "juvenal"),
+//	BARBOSA("https://api.github.com/search/repositories?q=language:java stars:>1000 size:<1000000&sort=stars&order=desc&per_page=100", "barbosa"),
+	BARBOSA("https://api.github.com/search/repositories?q=language:java stars:225..1000 size:0..50000&sort=stars&order=desc&per_page=100", "barbosa"),
+	JUVENAL("https://api.github.com/search/repositories?q=language:java stars:225..1000 size:50000..1000000&sort=stars&order=desc&per_page=100", "juvenal"),
 //	TINY("https://api.github.com/search/repositories?q=language:java stars:>1000 size:<1000&sort=stars&order=desc&per_page=100", "tiny"),
 	// joda-time
 //	TINY("https://api.github.com/search/repositories?q=joda-time stars:>900&sort=stars&order=desc&per_page=100", "tiny"),
