@@ -4,7 +4,7 @@
 	<groupId>br.com.guilhermebarbosa</groupId>
 	<artifactId>gitfactor</artifactId>
 	<version>1.0</version>
-	
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -106,6 +106,16 @@
 			<artifactId>commons-dbcp</artifactId>
 			<version>1.4</version>
 		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-test</artifactId>
+			<version>4.1.2.RELEASE</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>3.3.2</version>
+		</dependency>
 	</dependencies>
 
 	<profiles>
@@ -154,6 +164,14 @@
 		<resources>
 			<resource>
 				<directory>src/main/java</directory>
+				<filtering>true</filtering>
+				<includes>
+					<include>**/*.xml</include>
+					<include>env.properties</include>
+				</includes>
+			</resource>
+			<resource>
+				<directory>src/test/java</directory>
 				<filtering>true</filtering>
 				<includes>
 					<include>**/*.xml</include>
