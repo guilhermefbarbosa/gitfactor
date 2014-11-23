@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -52,8 +53,13 @@ import org.eclipse.jgit.api.errors.InvalidRefNameException;
 import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.api.errors.RefAlreadyExistsException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
+import org.eclipse.jgit.errors.IncorrectObjectTypeException;
+import org.eclipse.jgit.errors.MissingObjectException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevObject;
+import org.eclipse.jgit.revwalk.RevTag;
+import org.eclipse.jgit.revwalk.RevWalk;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -84,7 +90,7 @@ public class GitHubAnalyser {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
 		// search for repositories
-		List<GitRepository> javaRepos = searchRepositories(gitConfig.getUrl());
+		List<GitRepository> javaRepos = searchRepositories(url);
 		// create dirs
 		new File(tmpFolder).mkdirs();
 		Integer totalCommits = 0;
@@ -137,8 +143,11 @@ public class GitHubAnalyser {
 
 	private void analyseRepository(Git git, File gitRepoPath,
 			Repository repository, Iterable<RevCommit> call,
-			Map<String, Commit> mapCommits, GitRepository gitRepository) throws GitAPIException {
+			Map<String, Commit> mapCommits, GitRepository gitRepository) throws GitAPIException, 
+			MissingObjectException, IncorrectObjectTypeException, IOException {
 		List<Ref> listTags = git.tagList().call();
+		// save tags, without commit reference
+		saveTagsByRepository(repository, listTags, git.getRepository());
 		// inicializa o count commits
 		countCommits = new AtomicInteger(0);
 		// start analysis
@@ -148,8 +157,6 @@ public class GitHubAnalyser {
 		for (RevCommit revCommit : call) {
 			// get from map for better performance
 			Commit commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.PENDING, mapCommits);
-			// update tag in commit
-			updateCommitTagInformation(git, listTags, revCommit, commit, repository);
 			// atualiza o parent and save the parent commit
 			updateParentCommitInformation(repository, revCommit, commit, mapCommits);
 			// se possui apenas um pai, faz a comparacao
@@ -193,6 +200,51 @@ public class GitHubAnalyser {
 		gitHubDAO.mergeRepository(repository);
 	}
 
+	private void saveTagsByRepository(Repository repository, List<Ref> listTags, org.eclipse.jgit.lib.Repository repositoryGit) throws MissingObjectException, IncorrectObjectTypeException, IOException {
+		for (Ref ref : listTags) {
+			final RevWalk walk = new RevWalk(repositoryGit);
+			try {
+				RevObject revObject = walk.parseAny(ref.getObjectId());
+				String tagName = null;
+				String author = null;
+				Date date = null;
+				if ( revObject instanceof RevCommit ) {
+					RevCommit revCommit = (RevCommit) revObject;
+					tagName = ref.getName();
+					author = revCommit.getAuthorIdent().getName();
+					date = new Date(new Long(revCommit.getCommitTime()*1000L));
+				} else if ( revObject instanceof RevTag ) {
+					RevTag revTag = (RevTag) revObject;
+					tagName = revTag.getTagName();
+					author = revTag.getTaggerIdent().getName();
+					date = revTag.getTaggerIdent().getWhen();	
+				} else {
+					continue;
+				}
+				
+				String dateString = new SimpleDateFormat("dd/MM/yyyy").format(date);
+				LOGGER.info(String.format("Found tag %1$s in date %2$s by author %3$s.", tagName, dateString, author));
+
+				Tag tag = gitHubDAO.findTagByName(ref.getName(), repository.getIdRepository());
+				if ( tag == null ) {
+					tag = new Tag(ref.getName());
+					tag.setAuthorName(author);
+					tag.setDate(date);
+					tag.setRepository(repository);
+					gitHubDAO.saveTag(tag);
+				} else {
+					tag.setAuthorName(author);
+					tag.setDate(date);
+					tag.setRepository(repository);
+					gitHubDAO.mergeTag(tag);
+				}
+			} catch(IncorrectObjectTypeException ex) {
+				LOGGER.error(ex.getMessage(), ex);
+				continue;
+			}
+		}
+	}
+
 	private void updateParentCommitInformation(Repository repository,
 			RevCommit revCommit, Commit commit, Map<String, Commit> mapCommits) {
 		if ( commit.getParent() == null && revCommit.getParentCount() == 1 ) {
@@ -223,19 +275,19 @@ public class GitHubAnalyser {
 		}
 	}
 
-	private void updateCommitTagInformation(Git git, List<Ref> listTags,
-			RevCommit revCommit, Commit commit, Repository repository) {
-		Ref tagByCommit = getTagByCommit(git, listTags, revCommit);
-		if ( tagByCommit != null ) {
-			Tag tag = gitHubDAO.findTagByName(tagByCommit.getName(), repository.getIdRepository());
-			if ( tag == null ) {
-				tag = new Tag(tagByCommit.getName());
-				gitHubDAO.saveTag(tag);
-			}
-			commit.setTag(tag);
-			gitHubDAO.mergeCommit(commit);
-		}
-	}
+//	private void updateCommitTagInformation(Git git, List<Ref> listTags,
+//			RevCommit revCommit, Commit commit, Repository repository) {
+//		Ref tagByCommit = getTagByCommit(git, listTags, revCommit);
+//		if ( tagByCommit != null ) {
+//			Tag tag = gitHubDAO.findTagByName(tagByCommit.getName(), repository.getIdRepository());
+//			if ( tag == null ) {
+//				tag = new Tag(tagByCommit.getName());
+//				gitHubDAO.saveTag(tag);
+//			}
+//			commit.setTag(tag);
+//			gitHubDAO.mergeCommit(commit);
+//		}
+//	}
 
 	private void saveRepositoriesFound(String tmpFolder,
 			List<GitRepository> javaRepos, Integer totalCommits, GitConfig gitConfig)
@@ -359,32 +411,12 @@ public class GitHubAnalyser {
 			commit.setStatus(status);
 			commit.setAuthorName(getAuthorName(revCommit));
 			commit.setParent(parent);
-			commit.setTag(saveTagByCommit(git, listTag, revCommit));
+//			commit.setTag(saveTagByCommit(git, listTag, revCommit));
 			gitHubDAO.saveCommit(commit);
 		}
 		// to avoid duplication and faster access
 		mapCommits.put(commit.getHash(), commit);
 		return commit;
-	}
-
-	private Tag saveTagByCommit(Git git, List<Ref> listTag, RevCommit revCommit) {
-		Ref refTag = getTagByCommit(git, listTag, revCommit);
-		if ( refTag != null ) {
-			Tag tag = new Tag(refTag.getName());
-			gitHubDAO.saveTag(tag);
-			return tag;
-		}
-		return null;
-	}
-
-	private Ref getTagByCommit(Git git, List<Ref> listTag, RevCommit revCommit) {
-    	for (Ref tag : listTag) {
-            if (tag.getObjectId().equals(revCommit.getId())) {
-            	LOGGER.info(String.format("Found tag %1$s for commit %2$s.", tag.getName(), revCommit.getName()));
-            	return tag;
-            }
-        }
-    	return null;
 	}
 
 	private String getMessageTruncated(RevCommit parentRevCommit) {

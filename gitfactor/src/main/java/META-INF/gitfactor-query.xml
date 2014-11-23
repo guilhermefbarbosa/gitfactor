@@ -31,8 +31,7 @@
 		<query>
 			select tag
 			from Tag tag
-			join tag.commits commit
-			join commit.repository repository
+			join tag.repository repository
 			where tag.name = :name
 			and repository.idRepository = :idRepository
 		</query>

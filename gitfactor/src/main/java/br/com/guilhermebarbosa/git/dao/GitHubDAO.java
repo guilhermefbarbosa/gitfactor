@@ -152,4 +152,9 @@ public class GitHubDAO {
 			return resultList.get(0);
 		} else return null;
 	}
+
+	@Transactional(value = TxType.REQUIRED)
+	public void mergeTag(Tag tag) {
+		em.merge(tag);
+	}
 }

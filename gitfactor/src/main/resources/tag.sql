@@ -17,3 +17,18 @@ CHANGE COLUMN `status` `status` VARCHAR(20) NULL DEFAULT NULL;
 
 ALTER TABLE `repository` 
 CHANGE COLUMN `status` `status` VARCHAR(20) NULL DEFAULT NULL ;
+
+ALTER TABLE `tag` 
+ADD COLUMN `id_repository` INT UNSIGNED NULL AFTER `name`,
+ADD INDEX `fk_repository_idx` (`id_repository` ASC);
+
+ALTER TABLE `tag` 
+ADD CONSTRAINT `fk_repository`
+  FOREIGN KEY (`id_repository`)
+  REFERENCES `repository` (`id_repository`)
+  ON DELETE NO ACTION
+  ON UPDATE NO ACTION;
+  
+ALTER TABLE `tag` 
+ADD COLUMN `date` TIMESTAMP NULL AFTER `id_repository`,
+ADD COLUMN `author_name` VARCHAR(100) NULL AFTER `date`;
