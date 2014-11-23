@@ -143,9 +143,10 @@ public class GitHubDAO {
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Tag findTagByName(String name) {
+	public Tag findTagByName(String name, Integer idRepository) {
 		Query query = em.createNamedQuery("Tag.findByName");
 		query.setParameter("name", name);
+		query.setParameter("idRepository", idRepository);
 		List<Tag> resultList = query.getResultList();
 		if ( resultList != null && !resultList.isEmpty() ) {
 			return resultList.get(0);

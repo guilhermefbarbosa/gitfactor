@@ -1,7 +1,9 @@
 package br.com.guilhermebarbosa.git;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.Properties;
 
 import org.apache.log4j.Logger;
@@ -21,6 +23,11 @@ public class GitfactorMain {
 			// shutdownhook to stop context gracefully
 			classPathXmlApplicationContext.registerShutdownHook();
 			classPathXmlApplicationContext.start();
+			// read from command line
+			System.out.println("Type the url to search git repositories in GitHub:");
+			// read line with url
+			BufferedReader bufferRead = new BufferedReader(new InputStreamReader(System.in));
+		    String url = bufferRead.readLine();
 			// obtem a query dependendo do ambiente
 			GitConfig gitConfig = obterGitConfig();
 			if ( gitConfig == null ) {
@@ -30,7 +37,7 @@ public class GitfactorMain {
 				LOGGER.info(String.format("Query String: %1$s", gitConfig.name()));
 				// get service
 				GitHubAnalyser gitHubAnalyser = (GitHubAnalyser) br.com.guilhermebarbosa.git.ApplicationContext.getInstance().getBean("gitHubAnalyser"); 
-				gitHubAnalyser.analyseGitHubByQueryUrl(gitConfig, tmpFolder, analyse);
+				gitHubAnalyser.analyseGitHubByQueryUrl(gitConfig, url, tmpFolder, analyse);
 			}
 			// close resources
 			classPathXmlApplicationContext.close();

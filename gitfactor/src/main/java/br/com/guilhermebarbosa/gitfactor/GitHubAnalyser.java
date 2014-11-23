@@ -80,7 +80,7 @@ public class GitHubAnalyser {
 	
 	@Autowired private GitHubDAO gitHubDAO;
 	
-	public void analyseGitHubByQueryUrl(GitConfig gitConfig, String tmpFolder, boolean analyse) throws Exception {
+	public void analyseGitHubByQueryUrl(GitConfig gitConfig, String url, String tmpFolder, boolean analyse) throws Exception {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
 		// search for repositories
@@ -149,7 +149,7 @@ public class GitHubAnalyser {
 			// get from map for better performance
 			Commit commit = saveCommit(git, listTags, repository, revCommit, StatusCommit.PENDING, mapCommits);
 			// update tag in commit
-			updateCommitTagInformation(git, listTags, revCommit, commit);
+			updateCommitTagInformation(git, listTags, revCommit, commit, repository);
 			// atualiza o parent and save the parent commit
 			updateParentCommitInformation(repository, revCommit, commit, mapCommits);
 			// se possui apenas um pai, faz a comparacao
@@ -224,10 +224,10 @@ public class GitHubAnalyser {
 	}
 
 	private void updateCommitTagInformation(Git git, List<Ref> listTags,
-			RevCommit revCommit, Commit commit) {
+			RevCommit revCommit, Commit commit, Repository repository) {
 		Ref tagByCommit = getTagByCommit(git, listTags, revCommit);
 		if ( tagByCommit != null ) {
-			Tag tag = gitHubDAO.findTagByName(tagByCommit.getName());
+			Tag tag = gitHubDAO.findTagByName(tagByCommit.getName(), repository.getIdRepository());
 			if ( tag == null ) {
 				tag = new Tag(tagByCommit.getName());
 				gitHubDAO.saveTag(tag);
