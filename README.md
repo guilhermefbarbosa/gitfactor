@@ -5,6 +5,21 @@ gitFactor - Instruções de Uso
 
 * JDK 7
 * MySQL 5
+* Maven 3
+
+##### Bibliotecas de dependência
+
+Fazer o clone do projeto pelo git e chamar o comando para gerar o jar e copiar para uma pasta de execução do programa, por exemplo: /var/tmp/gitfactor
+
+```
+mvn clean install
+```
+
+Utilizar o comando do maven para copiar as dependências do projeto para o diretório /var/tmp/gitfactor/libs:
+
+```
+mvn -DoutputDirectory=/var/tmp/gitfactor/libs dependency:copy-dependencies
+```
 
 ##### Para executar a ferramenta, utilize o seguinte comando:
 
