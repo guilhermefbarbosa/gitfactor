@@ -118,48 +118,6 @@
 		</dependency>
 	</dependencies>
 
-	<profiles>
-		<profile>
-			<id>tiny</id>
-			<build>
-				<finalName>gitfactor-tiny-${project.version}</finalName>
-			</build>
-			<properties>
-				<mysql.password>123456</mysql.password>
-				<env>tiny</env>
-			</properties>
-		</profile>
-		<profile>
-			<id>barbosa</id>
-			<build>
-				<finalName>gitfactor-barbosa-${project.version}</finalName>
-			</build>
-			<properties>
-				<mysql.password>123456</mysql.password>
-				<env>barbosa</env>
-			</properties>
-		</profile>
-		<profile>
-			<id>juvenal</id>
-			<build>
-				<finalName>gitfactor-juvenal-${project.version}</finalName>
-			</build>
-			<properties>
-				<mysql.password>juvenal1345</mysql.password>
-				<env>juvenal</env>
-			</properties>
-		</profile>
-		<profile>
-			<id>biocev</id>
-			<build>
-				<finalName>gitfactor-biocev-${project.version}</finalName>
-			</build>
-			<properties>
-				<mysql.password>biocev121104</mysql.password>
-				<env>biocev</env>
-			</properties>
-		</profile>
-	</profiles>
 	<build>
 		<resources>
 			<resource>

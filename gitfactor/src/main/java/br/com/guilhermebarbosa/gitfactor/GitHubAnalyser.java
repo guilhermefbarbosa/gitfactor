@@ -66,7 +66,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
-import br.com.guilhermebarbosa.git.GitConfig;
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
 import br.com.guilhermebarbosa.git.dao.GitHubDAO;
 import br.com.guilhermebarbosa.git.model.Commit;
@@ -86,7 +85,7 @@ public class GitHubAnalyser {
 	
 	@Autowired private GitHubDAO gitHubDAO;
 	
-	public void analyseGitHubByQueryUrl(GitConfig gitConfig, String url, String tmpFolder, boolean analyse) throws Exception {
+	public void analyseGitHubByQueryUrl(String url, String tmpFolder, boolean analyse) throws Exception {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
 		// search for repositories
@@ -97,7 +96,7 @@ public class GitHubAnalyser {
 		// total of repositories
 		LOGGER.info(String.format("Total repositories: %1$d", javaRepos.size()));
 		// save repositories found and checkout
-		saveRepositoriesFound(tmpFolder, javaRepos, totalCommits, gitConfig);
+		saveRepositoriesFound(tmpFolder, javaRepos, totalCommits);
 		// for each repository, try to make an analysis
 		for (GitRepository gitRepository : javaRepos) {
 			// folder for checkout
@@ -110,9 +109,9 @@ public class GitHubAnalyser {
 			// numero de commits
 			int commits = Iterables.size(git.log().call());
 			// ignore repositories that are not acceptable
-			if ( !isRepositoryAcceptable(gitRepository, commits, gitConfig) ) {
-				LOGGER.info(String.format("Repository %1$s is not acceptable by config %2$s. Commits: %3$d ", 
-						gitRepository.getName(), gitConfig.name(), commits));
+			if ( !isRepositoryAcceptable(gitRepository, commits) ) {
+				LOGGER.info(String.format("Repository %1$s is not acceptable. Commits: %2$d ", 
+						gitRepository.getName(), commits));
 				continue;
 			}
 			// save the repository
@@ -290,7 +289,7 @@ public class GitHubAnalyser {
 //	}
 
 	private void saveRepositoriesFound(String tmpFolder,
-			List<GitRepository> javaRepos, Integer totalCommits, GitConfig gitConfig)
+			List<GitRepository> javaRepos, Integer totalCommits)
 			throws Exception, GitAPIException, NoHeadException {
 		Git git;
 		for (GitRepository gitRepository : javaRepos) {
@@ -304,7 +303,7 @@ public class GitHubAnalyser {
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			int commits = Iterables.size(git.log().call());
-			if ( isRepositoryAcceptable(gitRepository, commits, gitConfig) ) {
+			if ( isRepositoryAcceptable(gitRepository, commits) ) {
 				// sum total commits
 				totalCommits += commits;
 				// save the repository
@@ -314,14 +313,8 @@ public class GitHubAnalyser {
 		LOGGER.info(String.format("Total Commits: %1$d.", totalCommits));
 	}
 
-	private boolean isRepositoryAcceptable(GitRepository gitRepository, int commits, GitConfig gitConfig) {
-		switch (gitConfig) {
-			case BARBOSA: return commits <= 10000;
-			case BIOCEV: return commits > 10000;
-			case JUVENAL: return commits <= 10000;
-			case TINY: return true;
-		}
-		return false;
+	private boolean isRepositoryAcceptable(GitRepository gitRepository, int commits) {
+		return true;
 	}
 
 	private void saveRefactorings(Commit commit, List<Refactoring> refactorings) {
