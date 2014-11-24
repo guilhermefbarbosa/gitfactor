@@ -3,8 +3,8 @@ gitFactor - Instruções de Uso
 
 ##### Requisitos:
 
-[] JDK 7
-[] MySQL 5
+* JDK 7
+* MySQL 5
 
 ##### Para executar a ferramenta, utilize o seguinte comando:
 
