@@ -8,7 +8,10 @@ gitFactor - Instruções de Uso
 
 ##### Para executar a ferramenta, utilize o seguinte comando:
 
+```bash
 java -Xmx6144m -Xms6144m -jar gitfactor.jar /var/tmp/git
+```
+
 
 ##### O diretório /var/tmp/git é o diretório temporário que será utilizado pela ferramenta para clonar os repositórios.
 
