@@ -1,15 +1,21 @@
 gitFactor - Instruções de Uso
 =========
 
-##### Requisitos:
+##### Requisitos Mínimos:
 
 * JDK 7
 * MySQL 5
 * Maven 3
 
-##### Bibliotecas de dependência
+##### Getting started
 
-Fazer o clone do projeto pelo git e chamar o comando para gerar o jar e copiar para uma pasta de execução do programa, por exemplo: /var/tmp/gitfactor
+Fazer o clone do projeto pelo git:
+
+```
+git clone https://github.com/guilhermefbarbosa/gitfactor.git
+```
+
+Chamar o comando do Maven para gerar o jar e copiar para uma pasta de execução do programa, por exemplo: /var/tmp/gitfactor
 
 ```
 mvn clean install
@@ -21,15 +27,15 @@ Utilizar o comando do maven para copiar as dependências do projeto para o diret
 mvn -DoutputDirectory=/var/tmp/gitfactor/libs dependency:copy-dependencies
 ```
 
-##### Para executar a ferramenta, utilize o seguinte comando:
-
-```bash
-java -Dproperties.dir=/var/tmp/gitfactor -Xmx6144m -Xms6144m -jar gitfactor.jar /var/tmp/git
-```
-
 ##### Conexão de Banco de Dados
 
-Criar um arquivo chamado env.properties no diretório especificado em properties.dir no comando Java acima, com os dados de conexão do MySQL:
+Criar um schema no banco de dados MySQL e executar o arquivo schema.sql para criar as tabelas necessárias:
+
+```
+https://github.com/guilhermefbarbosa/gitfactor/blob/master/gitfactor/src/main/resources/schema.sql
+```
+
+Criar um arquivo chamado env.properties no diretório especificado para o jar, com os dados de conexão do MySQL:
 
 ```
 mysql.url=jdbc:mysql://localhost:3306/gitfactor
@@ -37,9 +43,16 @@ mysql.username=root
 mysql.password=123456
 ```
 
-##### O diretório /var/tmp/git é o diretório temporário que será utilizado pela ferramenta para clonar os repositórios.
+O diretório /var/tmp/git é o diretório temporário que será utilizado pela ferramenta para clonar os repositórios.
 
-Para execução da ferramenta será necessário a conexão com um banco de dados MySQL utilizando o arquivo schema.sql como o script inicial do banco de dados.
+##### Para executar a ferramenta, utilize o seguinte comando:
+
+```bash
+java -Dproperties.dir=/var/tmp/gitfactor -Xmx6144m -Xms6144m -jar gitfactor.jar /var/tmp/git
+```
+
+Após início da execução do programa, é solicitado uma url para selecionar os repositórios.
+Veja a documentação da api REST do GitHub para maiores informações: https://developer.github.com/v3/search/#search-repositories
 
 ##### Exemplo de URL para buscar repositórios:
 
