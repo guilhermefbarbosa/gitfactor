@@ -1,7 +1,7 @@
 gitFactor - Instruções de Uso
 =========
 
-##### Requisitos:
+##### Requisitos Mínimos:
 
 * JDK 7
 * MySQL 5
@@ -29,7 +29,7 @@ mvn -DoutputDirectory=/var/tmp/gitfactor/libs dependency:copy-dependencies
 
 ##### Conexão de Banco de Dados
 
-Criar um schema no banco de dados MySQL e executrar o arquivo schema.sql para criar as tabelas necessárias:
+Criar um schema no banco de dados MySQL e executar o arquivo schema.sql para criar as tabelas necessárias:
 
 ```
 https://github.com/guilhermefbarbosa/gitfactor/blob/master/gitfactor/src/main/resources/schema.sql
@@ -50,6 +50,9 @@ O diretório /var/tmp/git é o diretório temporário que será utilizado pela f
 ```bash
 java -Dproperties.dir=/var/tmp/gitfactor -Xmx6144m -Xms6144m -jar gitfactor.jar /var/tmp/git
 ```
+
+Após início da execução do programa, é solicitado uma url para selecionar os repositórios.
+Veja a documentação da api REST do GitHub para maiores informações: https://developer.github.com/v3/search/#search-repositories
 
 ##### Exemplo de URL para buscar repositórios:
 
