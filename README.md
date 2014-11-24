@@ -9,7 +9,17 @@ gitFactor - Instruções de Uso
 ##### Para executar a ferramenta, utilize o seguinte comando:
 
 ```bash
-java -Xmx6144m -Xms6144m -jar gitfactor.jar /var/tmp/git
+java -Dproperties.dir=/var/tmp/gitfactor -Xmx6144m -Xms6144m -jar gitfactor.jar /var/tmp/git
+```
+
+##### Conexão de Banco de Dados
+
+Criar um arquivo chamado env.properties no diretório especificado em properties.dir no comando Java acima, com os dados de conexão do MySQL:
+
+```
+mysql.url=jdbc:mysql://localhost:3306/gitfactor
+mysql.username=root
+mysql.password=123456
 ```
 
 ##### O diretório /var/tmp/git é o diretório temporário que será utilizado pela ferramenta para clonar os repositórios.
