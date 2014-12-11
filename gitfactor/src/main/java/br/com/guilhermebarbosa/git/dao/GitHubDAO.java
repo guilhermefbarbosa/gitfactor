@@ -12,9 +12,9 @@ import javax.transaction.Transactional.TxType;
 import org.springframework.stereotype.Repository;
 
 import br.com.guilhermebarbosa.git.model.Commit;
+import br.com.guilhermebarbosa.git.model.GitfactorMoveMethodRefactoring;
 import br.com.guilhermebarbosa.git.model.Operation;
 import br.com.guilhermebarbosa.git.model.Refactoring;
-import br.com.guilhermebarbosa.git.model.RefactoringByDeveloper;
 import br.com.guilhermebarbosa.git.model.Tag;
 
 @Repository
@@ -99,5 +99,39 @@ public class GitHubDAO {
 	@Transactional(value = TxType.REQUIRED)
 	public void mergeTag(Tag tag) {
 		em.merge(tag);
+	}
+	
+	public List<GitfactorMoveMethodRefactoring> getMoveMethodRefactoring(List<String> repositories) {
+		String queryStr = "select r.id_refactoring, rep.name, rep.url, rep.default_branch, c.hash as hash_c, p.hash as hash_pai, r.description " +
+			" from gitfactor_barbosa.refactoring r " +
+			" join gitfactor_barbosa.commit c on c.id_commit = r.id_commit " +
+			" join gitfactor_barbosa.commit p on p.id_commit = c.parent " +
+			" join gitfactor_barbosa.repository rep on rep.id_repository = c.id_repository " +
+			" where rep.name in (:repositories) " +
+			" and r.name = 'Move Operation'";
+		Query query = em.createNativeQuery(queryStr);
+		query.setParameter("repositories", repositories);
+		List<Object[]> list = query.getResultList();
+		List<GitfactorMoveMethodRefactoring> lista = new ArrayList<GitfactorMoveMethodRefactoring>();
+		for (Object[] item : list) {
+			GitfactorMoveMethodRefactoring gitfactorMoveMethodRefactoring = new GitfactorMoveMethodRefactoring();
+			gitfactorMoveMethodRefactoring.setIdRefactoring((Integer) item[0]);
+			gitfactorMoveMethodRefactoring.setRepositoryName((String) item[1]);
+			gitfactorMoveMethodRefactoring.setRepositoryCloneUrl((String) item[2]);
+			gitfactorMoveMethodRefactoring.setDefaultBranch((String) item[3]);
+			gitfactorMoveMethodRefactoring.setHashCommit((String) item[4]);
+			gitfactorMoveMethodRefactoring.setHashParentCommit((String) item[5]);
+			gitfactorMoveMethodRefactoring.setRefactoringDescription((String) item[6]);
+			gitfactorMoveMethodRefactoring.setOperations(findOperationByRefactoring(gitfactorMoveMethodRefactoring.getIdRefactoring()));
+			lista.add(gitfactorMoveMethodRefactoring);
+		}
+		return lista;
+	}
+	
+	@SuppressWarnings("unchecked")
+	public List<Operation> findOperationByRefactoring(Integer idRefactoring) {
+		Query query = em.createNamedQuery("Repository.findOperationByRefactoring");
+		query.setParameter("idRefactoring", idRefactoring);
+		return query.getResultList();
 	}
 }

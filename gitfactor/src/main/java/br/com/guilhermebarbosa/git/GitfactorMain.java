@@ -2,6 +2,7 @@ package br.com.guilhermebarbosa.git;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 
 import org.apache.log4j.Logger;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
@@ -14,7 +15,7 @@ public class GitfactorMain {
 	public static void main(String[] args) {
 		try {
 			String tmpFolder = args[0];
-			Boolean analyse = true;
+//			Boolean analyse = true;
 			// initialize spring
 			ClassPathXmlApplicationContext classPathXmlApplicationContext = new ClassPathXmlApplicationContext("classpath:applicationContext.xml");
 			// shutdownhook to stop context gracefully
@@ -41,7 +42,8 @@ public class GitfactorMain {
 				LOGGER.info(String.format("Query String: %1$s", url));
 				// get service
 				GitHubAnalyser gitHubAnalyser = (GitHubAnalyser) br.com.guilhermebarbosa.git.ApplicationContext.getInstance().getBean("gitHubAnalyser"); 
-				gitHubAnalyser.analyseGitHubByQueryUrl(url, tmpFolder, analyse);
+//				gitHubAnalyser.analyseGitHubByQueryUrl(url, tmpFolder, analyse);
+				gitHubAnalyser.analyseGitHubMoveMethodRefactorings(tmpFolder, Arrays.asList(new String[] { "junit" }));
 			}
 			// close resources
 			classPathXmlApplicationContext.close();

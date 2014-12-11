@@ -36,4 +36,11 @@
 			and repository.idRepository = :idRepository
 		</query>
 	</named-query>
+	<named-query name="Repository.findOperationByRefactoring">
+		<query>
+			select operation
+			from Operation operation
+			where operation.refactoring.idRefactoring = :idRefactoring
+		</query>
+	</named-query>
 </entity-mappings>

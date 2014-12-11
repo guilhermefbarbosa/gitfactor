@@ -23,19 +23,30 @@ import gr.uom.java.xmi.diff.Refactoring;
 import gr.uom.java.xmi.diff.RenameClassRefactoring;
 import gr.uom.java.xmi.diff.RenameOperationRefactoring;
 import gr.uom.java.xmi.diff.UMLModelDiff;
+import japa.parser.JavaParser;
+import japa.parser.ParseException;
+import japa.parser.ast.CompilationUnit;
+import japa.parser.ast.body.MethodDeclaration;
+import japa.parser.ast.visitor.VoidVisitorAdapter;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.net.MalformedURLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,6 +66,7 @@ import org.eclipse.jgit.api.errors.RefAlreadyExistsException;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.errors.MissingObjectException;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.revwalk.RevObject;
@@ -69,6 +81,8 @@ import org.springframework.web.client.RestTemplate;
 import br.com.guilhermebarbosa.git.GitRepositoryUtils;
 import br.com.guilhermebarbosa.git.dao.GitHubDAO;
 import br.com.guilhermebarbosa.git.model.Commit;
+import br.com.guilhermebarbosa.git.model.GitfactorMoveMethodRefactoring;
+import br.com.guilhermebarbosa.git.model.MoveMethodInformation;
 import br.com.guilhermebarbosa.git.model.Operation;
 import br.com.guilhermebarbosa.git.model.Repository;
 import br.com.guilhermebarbosa.git.model.RepositoryStatus;
@@ -85,6 +99,158 @@ public class GitHubAnalyser {
 	
 	@Autowired private GitHubDAO gitHubDAO;
 	
+	/**
+	 * Verify if the move method exists for the refactorings.
+	 * 
+	 * @param repositories
+	 * @throws Exception
+	 */
+	public void analyseGitHubMoveMethodRefactorings(String tmpFolder, List<String> repositories) throws Exception {
+		int countValid = 0;
+		int countInvalid = 0;
+		// get move method refactorings
+		List<GitfactorMoveMethodRefactoring> moveMethodRefactorings = gitHubDAO.getMoveMethodRefactoring(Arrays.asList(new String[] { "junit" }));
+		for (GitfactorMoveMethodRefactoring gitfactorMoveMethodRefactoring : moveMethodRefactorings) {
+			// folder for checkout
+			File gitRepoPath = new File(tmpFolder + File.separator + gitfactorMoveMethodRefactoring.getRepositoryName());
+			// clone repo to folder
+			// git repo
+			Git git = GitRepositoryUtils.cloneGitRepo(gitfactorMoveMethodRefactoring.getRepositoryCloneUrl(), gitRepoPath);
+			// checkout do master
+			checkoutMaster(git, gitfactorMoveMethodRefactoring.getDefaultBranch());
+			// get walk object
+			RevWalk walk = new RevWalk(git.getRepository());
+			// get commit
+	        String hashCommit = gitfactorMoveMethodRefactoring.getHashCommit();
+			RevCommit revCommit = walk.parseCommit(ObjectId.fromString(hashCommit));
+			// checkout commit and verify if method exists
+			checkout(git, revCommit, gitfactorMoveMethodRefactoring.getDefaultBranch());
+			// check if operations were realized
+			List<Operation> operations = gitfactorMoveMethodRefactoring.getOperations();
+			// check move method refactorings
+			MoveMethodInformation info1 = checkMoveMethodRefactoring(gitRepoPath, hashCommit, operations);
+			// get commit
+	        hashCommit = gitfactorMoveMethodRefactoring.getHashParentCommit();
+			// checkout parent commit and verify if method exists
+	        revCommit = walk.parseCommit(ObjectId.fromString(hashCommit));
+			// checkout commit and verify if method exists
+			checkout(git, revCommit, gitfactorMoveMethodRefactoring.getDefaultBranch());
+			// check move method refactorings
+			MoveMethodInformation info2 = checkMoveMethodRefactoring(gitRepoPath, hashCommit, operations);
+			if ( info1.getExistingMethod() != null && info2.getNonExistingMethod() != null &&
+					info1.getExistingMethod().equals(info2.getNonExistingMethod()) ) {
+				LOGGER.info("Refactoring Valid!!!");
+				countValid ++;
+				continue;
+			}
+			if ( info2.getExistingMethod() != null && info1.getNonExistingMethod() != null &&
+					info2.getExistingMethod().equals(info1.getNonExistingMethod()) ) {
+				LOGGER.info("Refactoring Valid!!!");
+				countValid ++;
+				continue;
+			}
+			// check if one method was moved to the other
+			if ( info1.getExistingMethod() != null && info2.getNonExistingMethod() != null &&
+					info2.getExistingMethod() != null && info1.getNonExistingMethod() != null &&
+					info1.getExistingMethod().equals(info2.getNonExistingMethod()) &&
+					info1.getNonExistingMethod().equals(info2.getExistingMethod()) ) {
+				LOGGER.info("Refactoring Valid!!!");
+				countValid ++;
+			} else {
+				if ( info1.getClassName().equals(info2.getClassName()) ) {
+					LOGGER.error("NOT MOVE OPERATION!!!");
+					LOGGER.error("Refactoring INVALID!!!");
+					countInvalid ++;
+				}
+			}
+		}
+		System.out.println(String.format("Valido: %1$d - Invalido: %2$d", countValid, countInvalid));
+	}
+
+	private MoveMethodInformation checkMoveMethodRefactoring(File gitRepoPath,
+			String hashCommit, List<Operation> operations)
+			throws ClassNotFoundException,
+			NoSuchMethodException, FileNotFoundException, IOException {
+		MoveMethodInformation info = new MoveMethodInformation();
+		// for each operation, check if the method was moved
+		for (Operation operation : operations) {
+			String className = operation.getClassName();
+			String methodName = operation.getName();
+			info.setClassName(className);
+			info.setMethodName(methodName);
+			// get file name to load
+			List<String> files = new ArrayList<String>();
+			findFileByClassName(gitRepoPath, className, files);
+			// argument types
+//			Class[] argumentTypes = getArgumentTypes(operation.getDescription());
+			Iterator<String> iterator = files.iterator();
+			if ( iterator.hasNext() ) {
+				String fileName = iterator.next();
+				final List<MethodDeclaration> methods = getMethodsByFileName(fileName);
+				MethodDeclaration method = findMethodByName(methodName, methods);
+				// get class method by refactoring and check if exists
+				// get class with reflection using loader with java class
+				// get method using reflection
+				if ( method == null ) {
+					info.setNonExistingMethod(methodName);
+					LOGGER.info(String.format("Method %1$s of class %2$s does not exist in commit %3$s.", methodName, className, hashCommit));
+				} else {
+					info.setExistingMethod(methodName);
+					LOGGER.info(String.format("Method %1$s of class %2$s exist in commit %3$s.", methodName, className, hashCommit));
+				}
+			}
+		}
+		return info;
+	}
+
+	private MethodDeclaration findMethodByName(String methodName, final List<MethodDeclaration> methods) {
+		for (MethodDeclaration methodDeclaration : methods) {
+			if ( methodDeclaration.getName().equals(methodName) ) {
+				return methodDeclaration;
+			}
+		}
+		return null;
+	}
+
+	private List<MethodDeclaration> getMethodsByFileName(String fileName)
+			throws FileNotFoundException, IOException {
+		CompilationUnit cu = null;
+		InputStream in = null;
+		try {
+			in = new FileInputStream(fileName);
+			cu = JavaParser.parse(in);
+		} catch (ParseException x) {
+			// handle parse exceptions here.
+		} finally {
+			in.close();
+		}
+		final List<MethodDeclaration> methods = new ArrayList<MethodDeclaration>();
+		VoidVisitorAdapter visitor = new VoidVisitorAdapter() {
+			@Override
+			public void visit(MethodDeclaration method, Object arg1) {
+				methods.add(method);
+			}
+		};
+		visitor.visit(cu, null);
+		return methods;
+	}
+	
+	private Class[] getArgumentTypes(String description) {
+		return null;
+	}
+
+	private void findFileByClassName(File path, String className, List<String> files) {
+		String classNameFolder = className.replaceAll("\\.", "/") + ".java";
+		if (!path.isDirectory() && path.getPath().endsWith(classNameFolder)) {
+			files.add(path.getPath());
+		} else if (path.isDirectory()) {
+			File[] listFiles = path.listFiles();
+			for (File file : listFiles) {
+				findFileByClassName(file, className, files);
+			}
+		}
+	}
+
 	public void analyseGitHubByQueryUrl(String url, String tmpFolder, boolean analyse) throws Exception {
 		// wait some time
 		Thread.sleep(Constants.WAIT_TIME);
@@ -105,7 +271,7 @@ public class GitHubAnalyser {
 			// git repo
 			Git git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			// checkout do master
-			Ref masterBranch = checkoutMaster(git, gitRepository);
+			Ref masterBranch = checkoutMaster(git, gitRepository.getDefaultBranch());
 			// numero de commits
 			int commits = Iterables.size(git.log().call());
 			// ignore repositories that are not acceptable
@@ -299,7 +465,7 @@ public class GitHubAnalyser {
 			// clone repo to folder
 			git = GitRepositoryUtils.cloneGitRepo(gitRepository.getCloneUrl(), gitRepoPath);
 			// checkout master to calculate log size correctly
-			checkoutMaster(git, gitRepository);
+			checkoutMaster(git, gitRepository.getDefaultBranch());
 			// get logs
 			LOGGER.info(String.format("Getting commit logs for repository %1$s.", gitRepository.getName()));
 			int commits = Iterables.size(git.log().call());
@@ -683,20 +849,20 @@ public class GitHubAnalyser {
 		// cria objeto que armazena as comparacoes
 		GitModelStructure modelStructure = new GitModelStructure();
 		// faz checkout do filho
-		checkout(git, revCommit, gitRepository);
+		checkout(git, revCommit, gitRepository.getDefaultBranch());
 		// obtem o map model do filho
 		modelStructure.setMapChildrenModel(obterMapModel(gitRepoPath));
 		// faz o checkout do pai
-		checkout(git, revCommit.getParent(0), gitRepository);
+		checkout(git, revCommit.getParent(0), gitRepository.getDefaultBranch());
 		// obtem o model do pai
 		modelStructure.setMapFatherModel(obterMapModel(gitRepoPath));
 		return modelStructure;
 	}
 
-	private static Ref checkout(Git git, RevCommit revCommit, GitRepository gitRepository) throws Exception {
+	private static Ref checkout(Git git, RevCommit revCommit, String defaultBranch) throws Exception {
 		// apaga a branch
 		try {
-			deleteBranch(git, revCommit, gitRepository);
+			deleteBranch(git, revCommit, defaultBranch);
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);
 		}
@@ -711,12 +877,12 @@ public class GitHubAnalyser {
 		return ref;
 	}
 
-	private static void deleteBranch(Git git, RevCommit revCommit, GitRepository gitRepository) throws Exception {
+	private static void deleteBranch(Git git, RevCommit revCommit, String defaultBranch) throws Exception {
 		List<Ref> call = git.branchList().call();
 		for (Ref ref : call) {
 			if (ref.getName().contains(revCommit.getName())) {
 				// checkout master
-				Ref masterBranch = checkoutMaster(git, gitRepository);
+				Ref masterBranch = checkoutMaster(git, defaultBranch);
 				// se fez checkout do master, apaga os branchs
 				if ( masterBranch != null ) {
 					List<String> deletedBranches = git.branchDelete().setBranchNames(revCommit.getName()).call();
@@ -728,15 +894,15 @@ public class GitHubAnalyser {
 		}
 	}
 
-	private static Ref getMasterBranch(Git git, GitRepository gitRepository) throws GitAPIException, IOException {
-		Ref refMaster = git.getRepository().getRef(gitRepository.getDefaultBranch());
+	private static Ref getMasterBranch(Git git, String defaultBranch) throws GitAPIException, IOException {
+		Ref refMaster = git.getRepository().getRef(defaultBranch);
 		return refMaster;
 	}
 	
-	private static Ref checkoutMaster(Git git, GitRepository gitRepository) throws GitAPIException,
+	private static Ref checkoutMaster(Git git, String defaultBranch) throws GitAPIException,
 			RefAlreadyExistsException, RefNotFoundException,
 			InvalidRefNameException, CheckoutConflictException, IOException {
-		Ref masterBranch = getMasterBranch(git, gitRepository);
+		Ref masterBranch = getMasterBranch(git, defaultBranch);
 		if ( masterBranch != null ) {
 			CheckoutCommand checkoutMaster = git.checkout();
 			checkoutMaster.setName(masterBranch.getName()).call();
